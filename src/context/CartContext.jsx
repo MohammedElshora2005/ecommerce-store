@@ -27,7 +27,6 @@ export const CartProvider = ({ children }) => {
 
   // ✅ جلب العربة من Supabase (للأدمن والمستخدمين)
   const fetchCart = async () => {
-    // ✅ لو مش مسجل، اتخطى
     if (!user) {
       setCartItems([]);
       return;
@@ -37,7 +36,7 @@ export const CartProvider = ({ children }) => {
       setLoading(true);
       setError(null);
 
-      console.log('🔄 Fetching cart for user:', user.id);
+      console.log('🔄 Fetching cart for user ID:', user.id);
 
       const { data, error: fetchError } = await supabase
         .from('cart')
@@ -54,7 +53,7 @@ export const CartProvider = ({ children }) => {
         throw fetchError;
       }
 
-      console.log('📦 Cart data from Supabase:', data);
+      console.log('📦 Cart data:', data);
 
       if (data && data.length > 0) {
         const items = data.map(item => {
@@ -76,7 +75,7 @@ export const CartProvider = ({ children }) => {
         console.log('✅ Setting cart items:', items);
         setCartItems(items);
       } else {
-        console.log('⚠️ No cart items found for user:', user.id);
+        console.log('⚠️ No cart items found');
         setCartItems([]);
       }
     } catch (error) {
@@ -138,47 +137,42 @@ export const CartProvider = ({ children }) => {
         throw new Error('المخزون غير كافٍ');
       }
 
-      // ✅ التحقق من وجود المنتج في العربة
-      const { data: existing, error: checkError } = await supabase
+      // ✅ إضافة مباشرة
+      const { error: insertError } = await supabase
         .from('cart')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('product_id', product.id)
-        .single();
+        .insert({
+          user_id: user.id,
+          product_id: product.id,
+          quantity: quantity
+        });
 
-      if (checkError && checkError.code !== 'PGRST116') {
-        // لو الجدول فاضي، يبقى عادي
-      }
+      if (insertError) {
+        // ✅ لو المنتج موجود، حدّث الكمية
+        if (insertError.code === '23505') {
+          console.log('⚠️ Product already in cart, updating quantity...');
+          
+          const { data: existing } = await supabase
+            .from('cart')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('product_id', product.id)
+            .single();
 
-      if (existing) {
-        // ✅ تحديث الكمية
-        const newQuantity = existing.quantity + quantity;
-        if (product.stock < newQuantity) {
-          throw new Error('المخزون غير كافٍ');
+          if (existing) {
+            const newQuantity = existing.quantity + quantity;
+            const { error: updateError } = await supabase
+              .from('cart')
+              .update({ quantity: newQuantity })
+              .eq('id', existing.id);
+
+            if (updateError) throw updateError;
+          }
+        } else {
+          throw insertError;
         }
-
-        const { error: updateError } = await supabase
-          .from('cart')
-          .update({ quantity: newQuantity })
-          .eq('id', existing.id);
-
-        if (updateError) throw updateError;
-        
-        console.log('✅ Product quantity updated successfully!');
-      } else {
-        // ✅ إضافة منتج جديد
-        const { error: insertError } = await supabase
-          .from('cart')
-          .insert({
-            user_id: user.id,
-            product_id: product.id,
-            quantity: quantity
-          });
-
-        if (insertError) throw insertError;
-        
-        console.log('✅ New product added to cart successfully!');
       }
+
+      console.log('✅ Product added/updated successfully!');
 
       // ✅ جلب العربة مرة أخرى
       await fetchCart();
