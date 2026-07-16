@@ -37,6 +37,8 @@ export const CartProvider = ({ children }) => {
       setLoading(true);
       setError(null);
 
+      console.log('🔄 Fetching cart for user:', user.id);
+
       const { data, error: fetchError } = await supabase
         .from('cart')
         .select(`
@@ -48,7 +50,9 @@ export const CartProvider = ({ children }) => {
 
       if (fetchError) throw fetchError;
 
-      if (data) {
+      console.log('📦 Cart data:', data);
+
+      if (data && data.length > 0) {
         const items = data.map(item => ({
           ...item.products,
           quantity: item.quantity,
