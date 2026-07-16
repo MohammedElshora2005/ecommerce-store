@@ -10,7 +10,7 @@ const ContactPage = () => {
   const [status, setStatus] = useState({ type: '', message: '' });
 
   // ✅ الرابط المباشر للـ API
-  const API_URL = 'https://ecommerce-store.vercel.app';
+  const API_URL = 'https://ecommerce-store-five-lyart.vercel.app';
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
