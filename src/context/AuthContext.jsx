@@ -54,27 +54,30 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ✅ التحقق من حالة المستخدم عند تحميل الصفحة
+  // ✅ التحقق من حالة المستخدم عند تحميل الصفحة (مع إصلاح الخطأ)
   useEffect(() => {
-    const checkUser = async () => {
+    let subscription = null;
+    let isMounted = true;
+
+    const initAuth = async () => {
       try {
         setLoading(true);
-        
+
+        // ✅ جلب session
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
         if (sessionError) throw sessionError;
-        
-        if (session?.user) {
+
+        if (session?.user && isMounted) {
           const { data: userData, error: userError } = await supabase
             .from('users')
             .select('*')
             .eq('id', session.user.id)
             .single();
-          
+
           if (userError && userError.code !== 'PGRST116') {
             console.error('Error fetching user data:', userError);
           }
-          
+
           const mergedUser = {
             ...session.user,
             ...userData,
@@ -83,73 +86,81 @@ export const AuthProvider = ({ children }) => {
             loyaltyPoints: userData?.loyalty_points || 0,
             loyaltyLevel: userData?.loyalty_level || 'برونزي'
           };
-          
+
           setUser(mergedUser);
           setUserRole(mergedUser.role || 'user');
+          localStorage.setItem('user', JSON.stringify(mergedUser));
         } else {
           const storedUser = localStorage.getItem('user');
-          if (storedUser) {
+          if (storedUser && isMounted) {
             const parsedUser = JSON.parse(storedUser);
             setUser(parsedUser);
             setUserRole(parsedUser.role || 'user');
           }
         }
-      } catch (error) {
-        console.error('Error checking user:', error);
+
+        // ✅ الاستماع لتغيرات الـ Auth
+        const { data } = supabase.auth.onAuthStateChange(
+          async (event, session) => {
+            if (!isMounted) return;
+            
+            try {
+              if (event === 'SIGNED_IN' && session?.user) {
+                const { data: userData } = await supabase
+                  .from('users')
+                  .select('*')
+                  .eq('id', session.user.id)
+                  .single();
+
+                const mergedUser = {
+                  ...session.user,
+                  ...userData,
+                  id: session.user.id,
+                  role: userData?.role || 'user',
+                  loyaltyPoints: userData?.loyalty_points || 0,
+                  loyaltyLevel: userData?.loyalty_level || 'برونزي'
+                };
+
+                setUser(mergedUser);
+                setUserRole(mergedUser.role || 'user');
+                localStorage.setItem('user', JSON.stringify(mergedUser));
+              } else if (event === 'SIGNED_OUT') {
+                setUser(null);
+                setUserRole('user');
+                localStorage.removeItem('user');
+              }
+            } catch (err) {
+              console.error('Auth state change handler error:', err);
+            }
+          }
+        );
+
+        subscription = data.subscription;
+
+        // ✅ جلب المستخدمين
+        await fetchAllUsers();
+
+      } catch (err) {
+        console.error('Auth initialization error:', err);
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
-    checkUser();
-    
-    // ✅ الاستماع لتغيرات الـ Auth مع معالجة الأخطاء
-    try {
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(
-        async (event, session) => {
-          try {
-            if (event === 'SIGNED_IN' && session?.user) {
-              const { data: userData } = await supabase
-                .from('users')
-                .select('*')
-                .eq('id', session.user.id)
-                .single();
-              
-              const mergedUser = {
-                ...session.user,
-                ...userData,
-                id: session.user.id,
-                role: userData?.role || 'user',
-                loyaltyPoints: userData?.loyalty_points || 0,
-                loyaltyLevel: userData?.loyalty_level || 'برونزي'
-              };
-              
-              setUser(mergedUser);
-              setUserRole(mergedUser.role || 'user');
-              localStorage.setItem('user', JSON.stringify(mergedUser));
-            } else if (event === 'SIGNED_OUT') {
-              setUser(null);
-              setUserRole('user');
-              localStorage.removeItem('user');
-            }
-          } catch (err) {
-            console.error('Auth state change handler error:', err);
-          }
-        }
-      );
+    initAuth();
 
-      fetchAllUsers();
-
-      return () => {
-        try {
-          subscription?.unsubscribe();
-        } catch (err) {
-          console.log('Unsubscribe error:', err);
+    return () => {
+      isMounted = false;
+      try {
+        if (subscription) {
+          subscription.unsubscribe();
         }
-      };
-    } catch (err) {
-      console.error('Auth state change setup error:', err);
-    }
+      } catch (err) {
+        console.log('Unsubscribe error:', err);
+      }
+    };
   }, []);
 
   // ✅ تسجيل الدخول
