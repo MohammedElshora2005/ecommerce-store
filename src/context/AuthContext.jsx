@@ -37,7 +37,6 @@ export const AuthProvider = ({ children }) => {
         .select('*');
       
       if (error) {
-        // ✅ لو الجدول مش موجود، ارجع array فاضي
         if (error.code === '42P01') {
           console.warn('Users table does not exist yet');
           setAllUsers([]);
@@ -60,13 +59,11 @@ export const AuthProvider = ({ children }) => {
       try {
         setLoading(true);
         
-        // جلب session من Supabase
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
         if (sessionError) throw sessionError;
         
         if (session?.user) {
-          // جلب بيانات المستخدم من جدول users
           const { data: userData, error: userError } = await supabase
             .from('users')
             .select('*')
@@ -89,7 +86,6 @@ export const AuthProvider = ({ children }) => {
           setUser(mergedUser);
           setUserRole(mergedUser.role || 'user');
         } else {
-          // جلب من localStorage كـ fallback
           const storedUser = localStorage.getItem('user');
           if (storedUser) {
             const parsedUser = JSON.parse(storedUser);
@@ -106,13 +102,11 @@ export const AuthProvider = ({ children }) => {
 
     checkUser();
     
-    // ✅ الاستماع لتغيرات الـ Auth مع معالجة الأخطاء
     try {
       const { data: { subscription } } = supabase.auth.onAuthStateChange(
         async (event, session) => {
           try {
             if (event === 'SIGNED_IN' && session?.user) {
-              // جلب بيانات المستخدم من جدول users
               const { data: userData } = await supabase
                 .from('users')
                 .select('*')
@@ -142,7 +136,6 @@ export const AuthProvider = ({ children }) => {
         }
       );
 
-      // جلب المستخدمين
       fetchAllUsers();
 
       return () => {
@@ -163,17 +156,14 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       setError(null);
       
-      // ✅ محاولة تسجيل الدخول كأدمن من .env
       if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
         try {
-          // ✅ محاولة تسجيل الدخول باستخدام Supabase Auth
           const { data, error } = await supabase.auth.signInWithPassword({
             email: ADMIN_EMAIL,
             password: ADMIN_PASSWORD
           });
           
           if (!error && data?.user) {
-            // جلب بيانات المستخدم من جدول users
             const { data: userData } = await supabase
               .from('users')
               .select('*')
@@ -198,9 +188,9 @@ export const AuthProvider = ({ children }) => {
           console.error('Supabase admin login error:', supabaseError);
         }
         
-        // ✅ Fallback: لو فشل Supabase، استخدم localStorage
+        // ✅ Fallback: استخدم ID ثابت عشان الأدمن يشتغل في العربة
         const adminUser = {
-          id: 'admin-' + Date.now(),
+          id: ADMIN_EMAIL, // ✅ استخدم الإيميل كـ ID بدل admin-xxx
           email: ADMIN_EMAIL,
           name: 'أدمن الموقع',
           phone: '',
@@ -217,7 +207,6 @@ export const AuthProvider = ({ children }) => {
         return { success: true, user: adminUser };
       }
       
-      // ✅ تسجيل الدخول باستخدام Supabase Auth (للمستخدمين العاديين)
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
@@ -231,7 +220,6 @@ export const AuthProvider = ({ children }) => {
         return { success: false, error: 'فشل تسجيل الدخول' };
       }
       
-      // جلب بيانات المستخدم من جدول users
       const { data: userData, error: userError } = await supabase
         .from('users')
         .select('*')
@@ -292,12 +280,10 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       setError(null);
       
-      // ✅ منع تسجيل الأدمن
       if (email === ADMIN_EMAIL) {
         return { success: false, error: 'هذا البريد الإلكتروني محجوز' };
       }
       
-      // ✅ التسجيل باستخدام Supabase Auth
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -314,7 +300,6 @@ export const AuthProvider = ({ children }) => {
         return { success: false, error: 'فشل إنشاء الحساب' };
       }
       
-      // ✅ إضافة المستخدم لجدول users
       const { error: insertError } = await supabase
         .from('users')
         .insert({
@@ -332,7 +317,6 @@ export const AuthProvider = ({ children }) => {
         console.error('Error inserting user:', insertError);
       }
       
-      // ✅ جلب بيانات المستخدم بعد التسجيل
       const { data: userData } = await supabase
         .from('users')
         .select('*')
@@ -367,7 +351,6 @@ export const AuthProvider = ({ children }) => {
     try {
       setLoading(true);
       
-      // تسجيل الخروج من Supabase
       await supabase.auth.signOut();
       
       localStorage.removeItem('user');
@@ -439,9 +422,8 @@ export const AuthProvider = ({ children }) => {
         return { success: false, error: 'لا يوجد مستخدم مسجل' };
       }
       
-      // ✅ لو المستخدم أدمن (local) محدثش في Supabase
-      if (user.id?.startsWith('admin-')) {
-        // تحديث في localStorage بس
+      // ✅ لو الأدمن، تحديث localStorage بس
+      if (user.id === ADMIN_EMAIL || user.id?.startsWith('admin-')) {
         const updatedUser = {
           ...user,
           name: data.name || user.name,
@@ -456,7 +438,6 @@ export const AuthProvider = ({ children }) => {
         localStorage.setItem('user', JSON.stringify(updatedUser));
         setUser(updatedUser);
         
-        // تحديث allUsers
         setAllUsers(prev => prev.map(u => 
           u.id === user.id ? { ...u, name: data.name || u.name, phone: data.phone || u.phone, avatar: data.avatar || u.avatar } : u
         ));
@@ -464,14 +445,11 @@ export const AuthProvider = ({ children }) => {
         return { success: true };
       }
       
-      // ✅ للمستخدمين العاديين (Supabase)
-      // تجهيز البيانات للتحديث
       const updateData = {};
       if (data.name) updateData.name = data.name;
       if (data.phone !== undefined) updateData.phone = data.phone || '';
       if (data.avatar) updateData.avatar = data.avatar;
       
-      // تحديث في Supabase
       const { error: updateError } = await supabase
         .from('users')
         .update(updateData)
@@ -482,7 +460,6 @@ export const AuthProvider = ({ children }) => {
         throw updateError;
       }
       
-      // تحديث في localStorage
       const updatedUser = {
         ...user,
         name: data.name || user.name,
@@ -497,7 +474,6 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('user', JSON.stringify(updatedUser));
       setUser(updatedUser);
       
-      // تحديث allUsers
       setAllUsers(prev => prev.map(u => 
         u.id === user.id ? { ...u, name: data.name || u.name, phone: data.phone || u.phone, avatar: data.avatar || u.avatar } : u
       ));
@@ -583,13 +559,12 @@ export const AuthProvider = ({ children }) => {
   // ✅ تحديث إحصائيات المستخدم
   const updateUserStats = async (userId, orderTotal) => {
     try {
-      // ✅ لو أدمن، متحدثش
-      if (userId?.startsWith('admin-')) {
+      // ✅ لو الأدمن، اتخطى
+      if (userId === ADMIN_EMAIL || userId?.startsWith('admin-')) {
         console.log('Admin user, skipping stats update');
         return;
       }
       
-      // جلب بيانات المستخدم الحالية
       const { data: userData, error: fetchError } = await supabase
         .from('users')
         .select('*')
@@ -598,16 +573,13 @@ export const AuthProvider = ({ children }) => {
       
       if (fetchError) throw fetchError;
       
-      // حساب نقاط الولاء
       const pointsEarned = Math.floor(orderTotal / 100) * 10;
       const newTotalPoints = (userData?.loyalty_points || 0) + pointsEarned;
       
-      // تحديد مستوى الولاء
       let loyaltyLevel = 'برونزي';
       if (newTotalPoints >= 500) loyaltyLevel = 'ذهبي';
       else if (newTotalPoints >= 200) loyaltyLevel = 'فضي';
       
-      // تحديث في Supabase
       const { error: updateError } = await supabase
         .from('users')
         .update({
@@ -620,7 +592,6 @@ export const AuthProvider = ({ children }) => {
       
       if (updateError) throw updateError;
       
-      // تحديث allUsers
       setAllUsers(prev => prev.map(u => 
         u.id === userId ? { 
           ...u, 
@@ -631,7 +602,6 @@ export const AuthProvider = ({ children }) => {
         } : u
       ));
       
-      // تحديث المستخدم الحالي
       if (user && user.id === userId) {
         const updatedUser = {
           ...user,
@@ -678,7 +648,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // القيم التي سيتم توفيرها
   const value = {
     user,
     loading,
