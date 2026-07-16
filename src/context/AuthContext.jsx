@@ -142,33 +142,67 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       setError(null);
       
-      // ✅ تسجيل الدخول باستخدام Supabase Auth
+      // ✅ محاولة تسجيل الدخول كأدمن من .env
+      if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+        try {
+          // ✅ محاولة تسجيل الدخول باستخدام Supabase Auth
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email: ADMIN_EMAIL,
+            password: ADMIN_PASSWORD
+          });
+          
+          if (!error && data?.user) {
+            // جلب بيانات المستخدم من جدول users
+            const { data: userData } = await supabase
+              .from('users')
+              .select('*')
+              .eq('id', data.user.id)
+              .single();
+            
+            const mergedUser = {
+              ...data.user,
+              ...userData,
+              id: data.user.id,
+              role: 'admin',
+              loyaltyPoints: userData?.loyalty_points || 0,
+              loyaltyLevel: userData?.loyalty_level || 'برونزي'
+            };
+            
+            localStorage.setItem('user', JSON.stringify(mergedUser));
+            setUser(mergedUser);
+            setUserRole('admin');
+            return { success: true, user: mergedUser };
+          }
+        } catch (supabaseError) {
+          console.error('Supabase admin login error:', supabaseError);
+        }
+        
+        // ✅ Fallback: لو فشل Supabase، استخدم localStorage
+        const adminUser = {
+          id: 'admin-' + Date.now(),
+          email: ADMIN_EMAIL,
+          name: 'أدمن الموقع',
+          phone: '',
+          avatar: 'https://ui-avatars.com/api/?name=Admin&background=2563eb&color=fff',
+          user_metadata: { name: 'أدمن الموقع' },
+          role: 'admin',
+          loyaltyPoints: 0,
+          loyaltyLevel: 'برونزي'
+        };
+        
+        localStorage.setItem('user', JSON.stringify(adminUser));
+        setUser(adminUser);
+        setUserRole('admin');
+        return { success: true, user: adminUser };
+      }
+      
+      // ✅ تسجيل الدخول باستخدام Supabase Auth (للمستخدمين العاديين)
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
       
       if (error) {
-        // ✅ محاولة تسجيل الدخول كأدمن من .env
-        if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
-          const adminUser = {
-            id: 'admin-' + Date.now(),
-            email: ADMIN_EMAIL,
-            name: 'أدمن الموقع',
-            phone: '',
-            avatar: 'https://ui-avatars.com/api/?name=Admin&background=2563eb&color=fff',
-            user_metadata: { name: 'أدمن الموقع' },
-            role: 'admin',
-            loyaltyPoints: 0,
-            loyaltyLevel: 'برونزي'
-          };
-          
-          localStorage.setItem('user', JSON.stringify(adminUser));
-          setUser(adminUser);
-          setUserRole('admin');
-          return { success: true, user: adminUser };
-        }
-        
         return { success: false, error: error.message };
       }
       
