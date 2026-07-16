@@ -1,8 +1,8 @@
 // ecommerce-store/src/pages/OrdersPage.jsx
 
 import React, { useState, useEffect } from 'react';
-import { useCart } from '../hooks/useCart';
 import { useAuth } from '../hooks/useAuth';
+import { supabase } from '../lib/supabase';
 import { Link } from 'react-router-dom';
 import {
   ShoppingBagIcon,
@@ -20,7 +20,6 @@ import { toast } from 'react-toastify';
 
 const OrdersPage = () => {
   const { user } = useAuth();
-  const { orders, getUserOrders, updateOrderStatus, deleteOrder } = useCart();
   const [userOrders, setUserOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -34,13 +33,31 @@ const OrdersPage = () => {
     notes: ''
   });
 
-  useEffect(() => {
-    if (user) {
-      const filteredOrders = getUserOrders(user.id);
-      setUserOrders(filteredOrders);
+  // ✅ جلب طلبات المستخدم من Supabase
+  const fetchUserOrders = async () => {
+    if (!user) return;
+
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setUserOrders(data || []);
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+      toast.error('❌ حدث خطأ أثناء تحميل الطلبات');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  }, [user, orders, getUserOrders]);
+  };
+
+  useEffect(() => {
+    fetchUserOrders();
+  }, [user]);
 
   const getStatusBadge = (status) => {
     const statusMap = {
@@ -73,70 +90,61 @@ const OrdersPage = () => {
     } catch { return dateStr; }
   };
 
-  // ✅ فتح مودال التعديل
-  const handleEditClick = (order) => {
-    if (order.status !== 'pending') {
-      toast.warning('⚠️ لا يمكن تعديل الطلب إلا في حالة "قيد المراجعة"');
-      return;
-    }
-    setEditingOrder(order);
-    setEditFormData({
-      address: order.address || '',
-      shippingMethod: order.shippingMethod || 'standard',
-      paymentMethod: order.paymentMethod || 'cash',
-      notes: order.notes || ''
-    });
-    setShowEditModal(true);
-  };
-
-  // ✅ حفظ التعديلات
-  const handleSaveEdit = () => {
+  // ✅ تحديث الطلب في Supabase
+  const handleSaveEdit = async () => {
     if (!editFormData.address.trim()) {
       toast.warning('⚠️ من فضلك أدخل عنوان صحيح');
       return;
     }
 
-    // تحديث الطلب في localStorage
-    const updatedOrders = orders.map(order => 
-      order.id === editingOrder.id 
-        ? { 
-            ...order, 
-            address: editFormData.address,
-            shippingMethod: editFormData.shippingMethod,
-            paymentMethod: editFormData.paymentMethod,
-            notes: editFormData.notes
-          }
-        : order
-    );
-    
-    // حفظ في localStorage
-    localStorage.setItem('orders', JSON.stringify(updatedOrders));
-    
-    // تحديث الحالة
-    const filteredOrders = getUserOrders(user.id);
-    setUserOrders(filteredOrders);
-    
-    toast.success('✅ تم تحديث الطلب بنجاح');
-    setShowEditModal(false);
-    setEditingOrder(null);
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({
+          address: editFormData.address,
+          shipping_method: editFormData.shippingMethod,
+          payment_method: editFormData.paymentMethod,
+          notes: editFormData.notes
+        })
+        .eq('id', editingOrder.id);
+      
+      if (error) throw error;
+      
+      toast.success('✅ تم تحديث الطلب بنجاح');
+      setShowEditModal(false);
+      setEditingOrder(null);
+      fetchUserOrders();
+    } catch (error) {
+      console.error('Error updating order:', error);
+      toast.error('❌ حدث خطأ أثناء تحديث الطلب');
+    }
   };
 
-  // ✅ حذف طلب
-  const handleDeleteOrder = (order) => {
+  // ✅ حذف طلب من Supabase
+  const handleDeleteOrder = async (order) => {
     if (order.status !== 'pending') {
       toast.warning('⚠️ لا يمكن حذف الطلب إلا في حالة "قيد المراجعة"');
       return;
     }
 
-    if (window.confirm(`هل أنت متأكد من حذف الطلب ${order.id}؟`)) {
-      deleteOrder(order.id);
+    if (!window.confirm(`هل أنت متأكد من حذف الطلب ${order.id}؟`)) return;
+
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .delete()
+        .eq('id', order.id);
+      
+      if (error) throw error;
+      
       toast.success('✅ تم حذف الطلب بنجاح');
-      const filteredOrders = getUserOrders(user.id);
-      setUserOrders(filteredOrders);
+      fetchUserOrders();
+    } catch (error) {
+      console.error('Error deleting order:', error);
+      toast.error('❌ حدث خطأ أثناء حذف الطلب');
     }
   };
 
-  // تغيير البيانات في نموذج التعديل
   const handleEditChange = (e) => {
     const { name, value } = e.target;
     setEditFormData(prev => ({ ...prev, [name]: value }));
@@ -221,7 +229,16 @@ const OrdersPage = () => {
 
                         {canEdit && (
                           <button
-                            onClick={() => handleEditClick(order)}
+                            onClick={() => {
+                              setEditingOrder(order);
+                              setEditFormData({
+                                address: order.address || '',
+                                shippingMethod: order.shipping_method || 'standard',
+                                paymentMethod: order.payment_method || 'cash',
+                                notes: order.notes || ''
+                              });
+                              setShowEditModal(true);
+                            }}
                             className="flex items-center gap-1 text-sm text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300 transition-colors"
                           >
                             <PencilIcon className="h-4 w-4" />
@@ -292,18 +309,18 @@ const OrdersPage = () => {
             <div className="mb-4">
               <p className="text-xs text-gray-500 dark:text-gray-400">طريقة الشحن</p>
               <p className="font-medium text-gray-900 dark:text-white">
-                {selectedOrder.shippingMethod === 'standard' ? 'شحن عادي' :
-                 selectedOrder.shippingMethod === 'express' ? 'شحن سريع' :
-                 selectedOrder.shippingMethod === 'sameDay' ? 'شحن نفس اليوم' : 'غير محدد'}
+                {selectedOrder.shipping_method === 'standard' ? 'شحن عادي' :
+                 selectedOrder.shipping_method === 'express' ? 'شحن سريع' :
+                 selectedOrder.shipping_method === 'sameDay' ? 'شحن نفس اليوم' : 'غير محدد'}
               </p>
             </div>
 
             <div className="mb-4">
               <p className="text-xs text-gray-500 dark:text-gray-400">طريقة الدفع</p>
               <p className="font-medium text-gray-900 dark:text-white">
-                {selectedOrder.paymentMethod === 'cash' ? 'الدفع عند الاستلام' :
-                 selectedOrder.paymentMethod === 'card' ? 'بطاقة ائتمان' :
-                 selectedOrder.paymentMethod === 'wallet' ? 'محفظة رقمية' : 'غير محدد'}
+                {selectedOrder.payment_method === 'cash' ? 'الدفع عند الاستلام' :
+                 selectedOrder.payment_method === 'card' ? 'بطاقة ائتمان' :
+                 selectedOrder.payment_method === 'wallet' ? 'محفظة رقمية' : 'غير محدد'}
               </p>
             </div>
 
@@ -354,7 +371,7 @@ const OrdersPage = () => {
         </div>
       )}
 
-      {/* ✅ مودال تعديل الطلب (كامل) */}
+      {/* مودال تعديل الطلب */}
       {showEditModal && editingOrder && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
@@ -373,7 +390,6 @@ const OrdersPage = () => {
             </p>
 
             <div className="space-y-3">
-              {/* العنوان */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   عنوان الشحن *
@@ -388,7 +404,6 @@ const OrdersPage = () => {
                 />
               </div>
 
-              {/* طريقة الشحن */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   طريقة الشحن
@@ -405,7 +420,6 @@ const OrdersPage = () => {
                 </select>
               </div>
 
-              {/* طريقة الدفع */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   طريقة الدفع
@@ -422,7 +436,6 @@ const OrdersPage = () => {
                 </select>
               </div>
 
-              {/* ملاحظات */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   ملاحظات إضافية
