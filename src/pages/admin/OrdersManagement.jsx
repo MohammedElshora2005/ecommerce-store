@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { useCart } from '../../hooks/useCart';
+import { supabase } from '../../lib/supabase';
 import {
   ShoppingBagIcon,
   EyeIcon,
@@ -19,11 +19,11 @@ import {
   PencilIcon,
   TrashIcon
 } from '@heroicons/react/24/outline';
+import { toast } from 'react-toastify';
 
 const OrdersManagement = () => {
   const navigate = useNavigate();
-  const { isAdmin } = useAuth(); // ✅ isAdmin قيمة boolean مش دالة
-  const { orders, updateOrderStatus, deleteOrder } = useCart();
+  const { isAdmin } = useAuth();
   const [ordersList, setOrdersList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -32,17 +32,72 @@ const OrdersManagement = () => {
   const [showOrderDetails, setShowOrderDetails] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
 
-  // تحميل البيانات
+  // ✅ جلب الطلبات من Supabase
+  const fetchOrders = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setOrdersList(data || []);
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+      toast.error('❌ حدث خطأ أثناء تحميل الطلبات');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    // ✅ isAdmin قيمة boolean مش دالة
     if (!isAdmin) {
       navigate('/');
       return;
     }
-    setLoading(true);
-    setOrdersList(orders || []);
-    setLoading(false);
-  }, [isAdmin, navigate, orders]);
+    fetchOrders();
+  }, [isAdmin, navigate]);
+
+  // ✅ تحديث حالة الطلب
+  const handleUpdateStatus = async (orderId, newStatus) => {
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: newStatus })
+        .eq('id', orderId);
+      
+      if (error) throw error;
+      
+      toast.success('✅ تم تحديث حالة الطلب بنجاح');
+      setShowStatusModal(false);
+      setSelectedOrder(null);
+      fetchOrders();
+    } catch (error) {
+      console.error('Error updating order status:', error);
+      toast.error('❌ حدث خطأ أثناء تحديث حالة الطلب');
+    }
+  };
+
+  // ✅ حذف طلب
+  const handleDeleteOrder = async (orderId) => {
+    if (!window.confirm('هل أنت متأكد من حذف هذا الطلب؟')) return;
+
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .delete()
+        .eq('id', orderId);
+      
+      if (error) throw error;
+      
+      toast.success('✅ تم حذف الطلب بنجاح');
+      fetchOrders();
+    } catch (error) {
+      console.error('Error deleting order:', error);
+      toast.error('❌ حدث خطأ أثناء حذف الطلب');
+    }
+  };
 
   // حالات الطلب
   const statusOptions = [
@@ -102,22 +157,6 @@ const OrdersManagement = () => {
     return icons[status] || ClockIcon;
   };
 
-  // تحديث حالة الطلب
-  const handleUpdateStatus = (orderId, newStatus) => {
-    updateOrderStatus(orderId, newStatus);
-    setOrdersList(orders);
-    setShowStatusModal(false);
-    setSelectedOrder(null);
-  };
-
-  // حذف طلب
-  const handleDeleteOrder = (orderId) => {
-    if (window.confirm('هل أنت متأكد من حذف هذا الطلب؟')) {
-      deleteOrder(orderId);
-      setOrdersList(orders);
-    }
-  };
-
   // تصفية الطلبات
   const filteredOrders = ordersList.filter(order => {
     const matchesSearch = 
@@ -140,7 +179,6 @@ const OrdersManagement = () => {
     cancelled: ordersList.filter(o => o.status === 'cancelled').length
   };
 
-  // ✅ isAdmin قيمة boolean مش دالة
   if (!isAdmin) return null;
 
   return (
