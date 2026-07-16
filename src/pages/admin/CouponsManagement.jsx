@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { supabase } from '../../lib/supabase';
 import {
   TicketIcon,
   PlusIcon,
@@ -20,7 +21,7 @@ import { toast } from 'react-toastify';
 
 const CouponsManagement = () => {
   const navigate = useNavigate();
-  const { isAdmin } = useAuth(); // ✅ isAdmin قيمة boolean مش دالة
+  const { isAdmin } = useAuth();
   const [coupons, setCoupons] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -41,88 +42,158 @@ const CouponsManagement = () => {
     applicableUsers: []
   });
 
+  // ✅ جلب الأكواد من Supabase
+  const fetchCoupons = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('coupons')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setCoupons(data || []);
+    } catch (error) {
+      console.error('Error fetching coupons:', error);
+      toast.error('❌ حدث خطأ أثناء تحميل الأكواد');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    // ✅ isAdmin قيمة boolean مش دالة
     if (!isAdmin) {
       navigate('/');
       return;
     }
-
-    const savedCoupons = localStorage.getItem('coupons');
-    if (savedCoupons) {
-      setCoupons(JSON.parse(savedCoupons));
-    } else {
-      setCoupons([]);
-    }
-    setLoading(false);
+    fetchCoupons();
   }, [isAdmin, navigate]);
 
-  const saveCoupons = (newCoupons) => {
-    setCoupons(newCoupons);
-    localStorage.setItem('coupons', JSON.stringify(newCoupons));
-  };
-
-  const handleAddCoupon = () => {
+  // ✅ إضافة كود خصم
+  const handleAddCoupon = async () => {
     if (!formData.code || !formData.discountValue || !formData.startDate || !formData.endDate) {
       toast.warning('⚠️ من فضلك املأ جميع الحقول المطلوبة');
       return;
     }
 
-    if (coupons.some(c => c.code === formData.code.toUpperCase())) {
+    // التحقق من عدم وجود الكود مكرر
+    const { data: existing } = await supabase
+      .from('coupons')
+      .select('code')
+      .eq('code', formData.code.toUpperCase())
+      .single();
+
+    if (existing) {
       toast.warning('⚠️ هذا الكود موجود بالفعل');
       return;
     }
 
     const newCoupon = {
       id: `CPN-${Date.now().toString().slice(-6)}`,
-      ...formData,
       code: formData.code.toUpperCase(),
-      discountValue: parseFloat(formData.discountValue),
-      minOrder: parseFloat(formData.minOrder) || 0,
-      maxUses: parseInt(formData.maxUses) || 0,
-      usedCount: 0,
-      createdAt: new Date().toISOString().split('T')[0]
+      description: formData.description || '',
+      discount_type: formData.discountType,
+      discount_value: parseFloat(formData.discountValue),
+      min_order: parseFloat(formData.minOrder) || 0,
+      max_uses: parseInt(formData.maxUses) || 0,
+      used_count: 0,
+      start_date: formData.startDate,
+      end_date: formData.endDate,
+      active: true
     };
 
-    saveCoupons([newCoupon, ...coupons]);
-    setShowAddModal(false);
-    resetForm();
-    toast.success('✅ تم إضافة كود الخصم بنجاح');
+    try {
+      const { error } = await supabase
+        .from('coupons')
+        .insert([newCoupon]);
+      
+      if (error) throw error;
+      
+      toast.success('✅ تم إضافة كود الخصم بنجاح');
+      setShowAddModal(false);
+      resetForm();
+      fetchCoupons();
+    } catch (error) {
+      console.error('Error adding coupon:', error);
+      toast.error('❌ حدث خطأ أثناء إضافة الكود');
+    }
   };
 
-  const handleEditCoupon = () => {
-    const updatedCoupons = coupons.map(coupon =>
-      coupon.id === editingCoupon.id
-        ? {
-            ...coupon,
-            ...formData,
-            code: formData.code.toUpperCase(),
-            discountValue: parseFloat(formData.discountValue),
-            minOrder: parseFloat(formData.minOrder) || 0,
-            maxUses: parseInt(formData.maxUses) || 0
-          }
-        : coupon
-    );
+  // ✅ تعديل كود خصم
+  const handleEditCoupon = async () => {
+    if (!formData.code || !formData.discountValue || !formData.startDate || !formData.endDate) {
+      toast.warning('⚠️ من فضلك املأ جميع الحقول المطلوبة');
+      return;
+    }
 
-    saveCoupons(updatedCoupons);
-    setEditingCoupon(null);
-    resetForm();
-    toast.success('✅ تم تحديث كود الخصم بنجاح');
+    const updatedCoupon = {
+      code: formData.code.toUpperCase(),
+      description: formData.description || '',
+      discount_type: formData.discountType,
+      discount_value: parseFloat(formData.discountValue),
+      min_order: parseFloat(formData.minOrder) || 0,
+      max_uses: parseInt(formData.maxUses) || 0,
+      start_date: formData.startDate,
+      end_date: formData.endDate,
+      active: formData.active
+    };
+
+    try {
+      const { error } = await supabase
+        .from('coupons')
+        .update(updatedCoupon)
+        .eq('id', editingCoupon.id);
+      
+      if (error) throw error;
+      
+      toast.success('✅ تم تحديث كود الخصم بنجاح');
+      setEditingCoupon(null);
+      resetForm();
+      fetchCoupons();
+    } catch (error) {
+      console.error('Error updating coupon:', error);
+      toast.error('❌ حدث خطأ أثناء تحديث الكود');
+    }
   };
 
-  const handleDeleteCoupon = () => {
-    const updatedCoupons = coupons.filter(coupon => coupon.id !== showDeleteConfirm);
-    saveCoupons(updatedCoupons);
-    setShowDeleteConfirm(null);
-    toast.success('✅ تم حذف كود الخصم بنجاح');
+  // ✅ حذف كود خصم
+  const handleDeleteCoupon = async () => {
+    try {
+      const { error } = await supabase
+        .from('coupons')
+        .delete()
+        .eq('id', showDeleteConfirm);
+      
+      if (error) throw error;
+      
+      toast.success('✅ تم حذف كود الخصم بنجاح');
+      setShowDeleteConfirm(null);
+      fetchCoupons();
+    } catch (error) {
+      console.error('Error deleting coupon:', error);
+      toast.error('❌ حدث خطأ أثناء حذف الكود');
+    }
   };
 
-  const toggleCouponStatus = (couponId) => {
-    const updatedCoupons = coupons.map(coupon =>
-      coupon.id === couponId ? { ...coupon, active: !coupon.active } : coupon
-    );
-    saveCoupons(updatedCoupons);
-    toast.success(updatedCoupons.find(c => c.id === couponId).active ? '✅ تم تفعيل الكود' : '⏸️ تم إيقاف الكود');
+  // ✅ تغيير حالة الكود
+  const toggleCouponStatus = async (couponId) => {
+    const coupon = coupons.find(c => c.id === couponId);
+    if (!coupon) return;
+
+    try {
+      const { error } = await supabase
+        .from('coupons')
+        .update({ active: !coupon.active })
+        .eq('id', couponId);
+      
+      if (error) throw error;
+      
+      toast.success(!coupon.active ? '✅ تم تفعيل الكود' : '⏸️ تم إيقاف الكود');
+      fetchCoupons();
+    } catch (error) {
+      console.error('Error toggling coupon status:', error);
+      toast.error('❌ حدث خطأ أثناء تغيير حالة الكود');
+    }
   };
 
   const resetForm = () => {
@@ -146,15 +217,15 @@ const CouponsManagement = () => {
     setFormData({
       code: coupon.code,
       description: coupon.description || '',
-      discountType: coupon.discountType || 'percentage',
-      discountValue: coupon.discountValue,
-      minOrder: coupon.minOrder || '',
-      maxUses: coupon.maxUses || '',
-      usedCount: coupon.usedCount || 0,
-      startDate: coupon.startDate,
-      endDate: coupon.endDate,
+      discountType: coupon.discount_type || 'percentage',
+      discountValue: coupon.discount_value || '',
+      minOrder: coupon.min_order || '',
+      maxUses: coupon.max_uses || '',
+      usedCount: coupon.used_count || 0,
+      startDate: coupon.start_date,
+      endDate: coupon.end_date,
       active: coupon.active,
-      applicableUsers: coupon.applicableUsers || []
+      applicableUsers: coupon.applicable_users || []
     });
   };
 
@@ -187,10 +258,9 @@ const CouponsManagement = () => {
     total: coupons.length,
     active: coupons.filter(c => c.active).length,
     inactive: coupons.filter(c => !c.active).length,
-    totalUses: coupons.reduce((sum, c) => sum + c.usedCount, 0)
+    totalUses: coupons.reduce((sum, c) => sum + (c.used_count || 0), 0)
   };
 
-  // ✅ isAdmin قيمة boolean مش دالة
   if (!isAdmin) return null;
 
   return (
@@ -288,20 +358,20 @@ const CouponsManagement = () => {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`text-sm font-bold ${coupon.discountType === 'percentage' ? 'text-blue-600 dark:text-blue-400' : 'text-orange-600 dark:text-orange-400'}`}>
-                          {coupon.discountType === 'percentage' ? `${coupon.discountValue}%` : formatPrice(coupon.discountValue)}
+                        <span className={`text-sm font-bold ${coupon.discount_type === 'percentage' ? 'text-blue-600 dark:text-blue-400' : 'text-orange-600 dark:text-orange-400'}`}>
+                          {coupon.discount_type === 'percentage' ? `${coupon.discount_value}%` : formatPrice(coupon.discount_value)}
                         </span>
-                        {coupon.minOrder > 0 && (
-                          <div className="text-xs text-gray-400 dark:text-gray-500">الحد الأدنى: {formatPrice(coupon.minOrder)}</div>
+                        {coupon.min_order > 0 && (
+                          <div className="text-xs text-gray-400 dark:text-gray-500">الحد الأدنى: {formatPrice(coupon.min_order)}</div>
                         )}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
-                        <div>{coupon.usedCount}</div>
-                        <div className="text-xs text-gray-400 dark:text-gray-500">من {coupon.maxUses || '∞'}</div>
+                        <div>{coupon.used_count || 0}</div>
+                        <div className="text-xs text-gray-400 dark:text-gray-500">من {coupon.max_uses || '∞'}</div>
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
-                        <div>{formatDate(coupon.startDate)}</div>
-                        <div className="text-xs text-gray-400 dark:text-gray-500">→ {formatDate(coupon.endDate)}</div>
+                        <div>{formatDate(coupon.start_date)}</div>
+                        <div className="text-xs text-gray-400 dark:text-gray-500">→ {formatDate(coupon.end_date)}</div>
                       </td>
                       <td className="px-4 py-3">
                         <button
@@ -476,9 +546,7 @@ const CouponsManagement = () => {
                 <TrashIcon className="h-8 w-8 text-red-600 dark:text-red-400" />
               </div>
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">تأكيد الحذف</h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                هل أنت متأكد من حذف هذا الكود؟
-              </p>
+              <p className="text-gray-600 dark:text-gray-400">هل أنت متأكد من حذف هذا الكود؟</p>
             </div>
             <div className="flex gap-3">
               <button
