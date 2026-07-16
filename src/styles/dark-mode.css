@@ -1,0 +1,745 @@
+/* ecommerce-store/src/styles/dark-mode.css */
+
+/* ============================================
+   ✅ دعم الوضع المظلم (Dark Mode) - نسخة محسنة
+   ============================================ */
+
+/* ⚠️ تنبيه: هذا الملف اختياري، يمكنك الاستغناء عنه واستخدام 
+   متغيرات CSS الموجودة في index.css بدلاً منه */
+
+/* إعدادات الوضع المظلم */
+.dark {
+  background-color: #111827;
+  color: #f9fafb;
+}
+
+.dark body {
+  background-color: #111827;
+  color: #f9fafb;
+}
+
+/* ============================================
+   ✅ تحسين الخلفيات (Backgrounds)
+   ============================================ */
+
+/* الخلفيات الأساسية */
+.dark .bg-white {
+  background-color: #1f2937 !important;
+}
+
+.dark .bg-gray-50 {
+  background-color: #1f2937 !important;
+}
+
+.dark .bg-gray-100 {
+  background-color: #374151 !important;
+}
+
+.dark .bg-gray-200 {
+  background-color: #374151 !important;
+}
+
+.dark .bg-gray-300 {
+  background-color: #4b5563 !important;
+}
+
+/* الخلفيات الملونة (مع شفافية) */
+.dark .bg-blue-50 {
+  background-color: rgba(30, 58, 138, 0.3) !important;
+}
+
+.dark .bg-red-50 {
+  background-color: rgba(127, 29, 29, 0.3) !important;
+}
+
+.dark .bg-green-50 {
+  background-color: rgba(20, 83, 45, 0.3) !important;
+}
+
+.dark .bg-yellow-50 {
+  background-color: rgba(120, 53, 15, 0.3) !important;
+}
+
+.dark .bg-purple-50 {
+  background-color: rgba(91, 33, 182, 0.3) !important;
+}
+
+.dark .bg-pink-50 {
+  background-color: rgba(157, 23, 77, 0.3) !important;
+}
+
+.dark .bg-indigo-50 {
+  background-color: rgba(49, 46, 129, 0.3) !important;
+}
+
+.dark .bg-orange-50 {
+  background-color: rgba(120, 53, 15, 0.3) !important;
+}
+
+.dark .bg-amber-50 {
+  background-color: rgba(120, 53, 15, 0.3) !important;
+}
+
+/* ============================================
+   ✅ تحسين الحدود (Borders)
+   ============================================ */
+
+.dark .border-gray-100 {
+  border-color: #374151 !important;
+}
+
+.dark .border-gray-200 {
+  border-color: #374151 !important;
+}
+
+.dark .border-gray-300 {
+  border-color: #4b5563 !important;
+}
+
+.dark .border-gray-400 {
+  border-color: #6b7280 !important;
+}
+
+.dark .border-blue-200 {
+  border-color: #1e40af !important;
+}
+
+.dark .border-red-200 {
+  border-color: #7f1d1d !important;
+}
+
+.dark .border-green-200 {
+  border-color: #14532d !important;
+}
+
+.dark .border-yellow-200 {
+  border-color: #78350f !important;
+}
+
+.dark .border-amber-200 {
+  border-color: #78350f !important;
+}
+
+.dark .border-purple-200 {
+  border-color: #4c1d95 !important;
+}
+
+.dark .border-pink-200 {
+  border-color: #831843 !important;
+}
+
+.dark .border-indigo-200 {
+  border-color: #312e81 !important;
+}
+
+.dark .border-orange-200 {
+  border-color: #7c2d12 !important;
+}
+
+/* ============================================
+   ✅ تحسين النصوص (Text Colors)
+   ============================================ */
+
+/* النصوص الأساسية */
+.dark .text-gray-900 {
+  color: #f9fafb !important;
+}
+
+.dark .text-gray-800 {
+  color: #f3f4f6 !important;
+}
+
+.dark .text-gray-700 {
+  color: #d1d5db !important;
+}
+
+.dark .text-gray-600 {
+  color: #9ca3af !important;
+}
+
+.dark .text-gray-500 {
+  color: #9ca3af !important;
+}
+
+.dark .text-gray-400 {
+  color: #9ca3af !important;
+}
+
+.dark .text-gray-300 {
+  color: #d1d5db !important;
+}
+
+.dark .text-gray-200 {
+  color: #e5e7eb !important;
+}
+
+.dark .text-gray-100 {
+  color: #f3f4f6 !important;
+}
+
+/* النصوص الملونة */
+.dark .text-blue-600 {
+  color: #60a5fa !important;
+}
+
+.dark .text-blue-500 {
+  color: #3b82f6 !important;
+}
+
+.dark .text-blue-400 {
+  color: #60a5fa !important;
+}
+
+.dark .text-blue-700 {
+  color: #93c5fd !important;
+}
+
+.dark .text-red-600 {
+  color: #f87171 !important;
+}
+
+.dark .text-red-500 {
+  color: #ef4444 !important;
+}
+
+.dark .text-red-400 {
+  color: #f87171 !important;
+}
+
+.dark .text-green-600 {
+  color: #34d399 !important;
+}
+
+.dark .text-green-500 {
+  color: #22c55e !important;
+}
+
+.dark .text-green-400 {
+  color: #34d399 !important;
+}
+
+.dark .text-yellow-600 {
+  color: #fbbf24 !important;
+}
+
+.dark .text-yellow-500 {
+  color: #eab308 !important;
+}
+
+.dark .text-yellow-400 {
+  color: #fbbf24 !important;
+}
+
+.dark .text-amber-600 {
+  color: #fbbf24 !important;
+}
+
+.dark .text-amber-500 {
+  color: #f59e0b !important;
+}
+
+.dark .text-amber-400 {
+  color: #fbbf24 !important;
+}
+
+.dark .text-purple-600 {
+  color: #a78bfa !important;
+}
+
+.dark .text-purple-500 {
+  color: #8b5cf6 !important;
+}
+
+.dark .text-purple-400 {
+  color: #a78bfa !important;
+}
+
+.dark .text-pink-600 {
+  color: #f472b6 !important;
+}
+
+.dark .text-pink-500 {
+  color: #ec4899 !important;
+}
+
+.dark .text-pink-400 {
+  color: #f472b6 !important;
+}
+
+.dark .text-indigo-600 {
+  color: #818cf8 !important;
+}
+
+.dark .text-indigo-500 {
+  color: #6366f1 !important;
+}
+
+.dark .text-indigo-400 {
+  color: #818cf8 !important;
+}
+
+.dark .text-orange-600 {
+  color: #fb923c !important;
+}
+
+.dark .text-orange-500 {
+  color: #f97316 !important;
+}
+
+.dark .text-orange-400 {
+  color: #fb923c !important;
+}
+
+/* النصوص البيضاء والسوداء */
+.dark .text-white {
+  color: #ffffff !important;
+}
+
+.dark .text-black {
+  color: #f9fafb !important;
+}
+
+/* ============================================
+   ✅ تحسين العناصر المحددة
+   ============================================ */
+
+/* ✅ الهيدر */
+.dark header {
+  background-color: rgba(31, 41, 55, 0.95) !important;
+  border-color: #374151 !important;
+}
+
+.dark header .text-gray-700 {
+  color: #d1d5db !important;
+}
+
+.dark header .text-gray-900 {
+  color: #ffffff !important;
+}
+
+.dark header .border-gray-100 {
+  border-color: #374151 !important;
+}
+
+.dark header .hover\:bg-gray-50:hover {
+  background-color: #374151 !important;
+}
+
+.dark header .bg-white {
+  background-color: #1f2937 !important;
+}
+
+.dark header .bg-white\/95 {
+  background-color: rgba(31, 41, 55, 0.95) !important;
+}
+
+/* ✅ الفوتر */
+.dark footer {
+  background-color: #111827 !important;
+  border-color: #1f2937 !important;
+}
+
+.dark footer .text-gray-400 {
+  color: #9ca3af !important;
+}
+
+.dark footer .bg-gray-800 {
+  background-color: #374151 !important;
+}
+
+.dark footer .border-gray-800 {
+  border-color: #1f2937 !important;
+}
+
+.dark footer .hover\:bg-blue-600:hover {
+  background-color: #1d4ed8 !important;
+}
+
+/* ✅ بطاقات المنتجات */
+.dark .product-card {
+  background-color: #1f2937 !important;
+  border-color: #374151 !important;
+  border-width: 1px !important;
+}
+
+.dark .product-card-title {
+  color: #ffffff !important;
+}
+
+.dark .product-card-title:hover {
+  color: #60a5fa !important;
+}
+
+.dark .card {
+  background-color: #1f2937 !important;
+  border-color: #374151 !important;
+}
+
+.dark .bg-white.rounded-xl {
+  background-color: #1f2937 !important;
+  border-color: #374151 !important;
+}
+
+.dark .bg-white.rounded-2xl {
+  background-color: #1f2937 !important;
+  border-color: #374151 !important;
+}
+
+.dark .bg-white.rounded-lg {
+  background-color: #1f2937 !important;
+  border-color: #374151 !important;
+}
+
+.dark .bg-white.rounded {
+  background-color: #1f2937 !important;
+  border-color: #374151 !important;
+}
+
+/* ✅ المودال */
+.dark .fixed .bg-white {
+  background-color: #1f2937 !important;
+  border-color: #374151 !important;
+}
+
+.dark .fixed .bg-white.rounded-xl {
+  background-color: #1f2937 !important;
+  border-color: #374151 !important;
+}
+
+.dark .fixed .bg-white.rounded-2xl {
+  background-color: #1f2937 !important;
+  border-color: #374151 !important;
+}
+
+.dark .modal-content {
+  background-color: #1f2937 !important;
+  border-color: #374151 !important;
+}
+
+/* ✅ القوائم المنسدلة */
+.dark .absolute .bg-white {
+  background-color: #1f2937 !important;
+  border-color: #374151 !important;
+}
+
+.dark .absolute .bg-blue-50 {
+  background-color: rgba(30, 58, 138, 0.3) !important;
+}
+
+.dark .absolute .text-gray-900 {
+  color: #ffffff !important;
+}
+
+.dark .absolute .text-gray-600 {
+  color: #9ca3af !important;
+}
+
+.dark .absolute .border-gray-100 {
+  border-color: #374151 !important;
+}
+
+.dark .absolute .hover\:bg-blue-50:hover {
+  background-color: rgba(30, 58, 138, 0.3) !important;
+}
+
+.dark .absolute .hover\:text-blue-600:hover {
+  color: #60a5fa !important;
+}
+
+/* ✅ الروابط */
+.dark .nav-link {
+  color: #d1d5db !important;
+}
+
+.dark .nav-link:hover {
+  color: #60a5fa !important;
+}
+
+.dark .nav-link-active {
+  color: #60a5fa !important;
+}
+
+.dark .hover\:text-blue-600:hover {
+  color: #60a5fa !important;
+}
+
+.dark .hover\:text-blue-800:hover {
+  color: #93c5fd !important;
+}
+
+.dark .text-blue-600 {
+  color: #60a5fa !important;
+}
+
+.dark a {
+  color: #60a5fa !important;
+}
+
+.dark a:hover {
+  color: #93c5fd !important;
+}
+
+/* ✅ التقييمات */
+.dark .rating-star-empty {
+  color: #4b5563 !important;
+}
+
+/* ✅ الجداول */
+.dark .bg-gray-50 {
+  background-color: #1f2937 !important;
+}
+
+.dark .divide-gray-200 {
+  border-color: #374151 !important;
+}
+
+.dark .divide-y {
+  border-color: #374151 !important;
+}
+
+.dark .divide-y-gray-200 {
+  border-color: #374151 !important;
+}
+
+.dark .hover\:bg-gray-50:hover {
+  background-color: #374151 !important;
+}
+
+.dark .hover\:bg-gray-100:hover {
+  background-color: #374151 !important;
+}
+
+/* ✅ الأزرار في الوضع المظلم (تجاوز) */
+.dark .btn-secondary {
+  background-color: #374151 !important;
+  color: #d1d5db !important;
+}
+
+.dark .btn-secondary:hover {
+  background-color: #4b5563 !important;
+}
+
+.dark .btn-outline {
+  border-color: #60a5fa !important;
+  color: #60a5fa !important;
+}
+
+.dark .btn-outline:hover {
+  background-color: #3b82f6 !important;
+  color: #ffffff !important;
+}
+
+/* ✅ التبويبات */
+.dark .tab {
+  color: #9ca3af !important;
+}
+
+.dark .tab:hover {
+  color: #ffffff !important;
+  background-color: #374151 !important;
+}
+
+.dark .tab-active {
+  color: #60a5fa !important;
+  background-color: rgba(30, 58, 138, 0.3) !important;
+}
+
+/* ✅ الإشعارات */
+.dark .notification-success {
+  background-color: rgba(20, 83, 45, 0.3) !important;
+  border-color: #14532d !important;
+  color: #34d399 !important;
+}
+
+.dark .notification-error {
+  background-color: rgba(127, 29, 29, 0.3) !important;
+  border-color: #7f1d1d !important;
+  color: #f87171 !important;
+}
+
+.dark .notification-warning {
+  background-color: rgba(120, 53, 15, 0.3) !important;
+  border-color: #78350f !important;
+  color: #fbbf24 !important;
+}
+
+.dark .notification-info {
+  background-color: rgba(30, 58, 138, 0.3) !important;
+  border-color: #1e3a8a !important;
+  color: #60a5fa !important;
+}
+
+/* ✅ شريط التمرير في الوضع المظلم */
+.dark ::-webkit-scrollbar-track {
+  background-color: #1f2937 !important;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background-color: #4b5563 !important;
+  border-radius: 9999px !important;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background-color: #6b7280 !important;
+}
+
+/* ✅ التحديد في الوضع المظلم */
+.dark ::selection {
+  background-color: #1d4ed8 !important;
+  color: #ffffff !important;
+}
+
+/* ✅ الخلفيات المتدرجة */
+.dark .bg-gradient-to-br {
+  background-image: linear-gradient(to bottom right, #111827, #1f2937, #111827) !important;
+}
+
+/* ✅ تأثير الزجاج */
+.dark .glass-effect {
+  background-color: rgba(31, 41, 55, 0.8) !important;
+  backdrop-filter: blur(8px) !important;
+}
+
+/* ✅ الأيقونات الملونة */
+.dark .text-yellow-400 {
+  color: #fbbf24 !important;
+}
+
+.dark .text-yellow-500 {
+  color: #eab308 !important;
+}
+
+.dark .text-amber-500 {
+  color: #f59e0b !important;
+}
+
+/* ✅ تحسين الروابط داخل البطاقات */
+.dark .product-card a {
+  color: #60a5fa !important;
+}
+
+.dark .product-card a:hover {
+  color: #93c5fd !important;
+}
+
+/* ============================================
+   ✅ تحسين التباين للنصوص الصغيرة
+   ============================================ */
+
+.dark .text-xs {
+  color: #9ca3af !important;
+}
+
+.dark .text-sm {
+  color: #d1d5db !important;
+}
+
+.dark .text-base {
+  color: #e5e7eb !important;
+}
+
+.dark .text-lg {
+  color: #f3f4f6 !important;
+}
+
+.dark .text-xl {
+  color: #f9fafb !important;
+}
+
+.dark .text-2xl {
+  color: #ffffff !important;
+}
+
+/* ============================================
+   ✅ تحسين حقول الإدخال في الوضع المظلم
+   ============================================ */
+
+.dark input,
+.dark textarea,
+.dark select {
+  background-color: #374151 !important;
+  border-color: #4b5563 !important;
+  color: #ffffff !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #9ca3af !important;
+}
+
+.dark input:focus,
+.dark textarea:focus,
+.dark select:focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3) !important;
+}
+
+/* ============================================
+   ✅ تحسين الأزرار في الوضع المظلم
+   ============================================ */
+
+.dark button.btn-primary {
+  background-color: #2563eb !important;
+}
+
+.dark button.btn-primary:hover {
+  background-color: #1d4ed8 !important;
+}
+
+.dark button.btn-danger {
+  background-color: #dc2626 !important;
+}
+
+.dark button.btn-danger:hover {
+  background-color: #b91c1c !important;
+}
+
+.dark button.btn-success {
+  background-color: #16a34a !important;
+}
+
+.dark button.btn-success:hover {
+  background-color: #15803d !important;
+}
+
+/* ============================================
+   ✅ تحسين الجداول والصفوف
+   ============================================ */
+
+.dark .table-row {
+  background-color: #1f2937 !important;
+}
+
+.dark .table-row:hover {
+  background-color: #374151 !important;
+}
+
+.dark .table-header {
+  background-color: #111827 !important;
+  color: #f9fafb !important;
+}
+
+.dark .table-cell {
+  border-color: #374151 !important;
+}
+
+/* ============================================
+   ✅ تحسين العناوين
+   ============================================ */
+
+.dark h1,
+.dark h2,
+.dark h3,
+.dark h4,
+.dark h5,
+.dark h6 {
+  color: #ffffff !important;
+}
+
+.dark .heading {
+  color: #ffffff !important;
+}
+
+.dark .subheading {
+  color: #d1d5db !important;
+}
