@@ -29,18 +29,27 @@ export const AuthProvider = ({ children }) => {
   const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || 'admin1@gmail.com';
   const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'Admin@123';
 
-  // ✅ جلب المستخدمين من Supabase
+  // ✅ جلب المستخدمين من Supabase مع معالجة الخطأ
   const fetchAllUsers = async () => {
     try {
       const { data, error } = await supabase
         .from('users')
         .select('*');
       
-      if (error) throw error;
+      if (error) {
+        // ✅ لو الجدول مش موجود، ارجع array فاضي
+        if (error.code === '42P01') {
+          console.warn('Users table does not exist yet');
+          setAllUsers([]);
+          return [];
+        }
+        throw error;
+      }
       setAllUsers(data || []);
       return data;
     } catch (err) {
       console.error('Error fetching users:', err);
+      setAllUsers([]);
       return [];
     }
   };
