@@ -25,9 +25,10 @@ export const CartProvider = ({ children }) => {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [orders, setOrders] = useState([]);
 
-  // ✅ جلب العربة من Supabase
+  // ✅ جلب العربة من Supabase (مع تخطي الأدمن)
   const fetchCart = async () => {
-    if (!user) {
+    // ✅ لو أدمن (local) مش مسجل في Supabase، اتخطى
+    if (!user || user.id?.startsWith('admin-')) {
       setCartItems([]);
       return;
     }
@@ -65,9 +66,13 @@ export const CartProvider = ({ children }) => {
     }
   };
 
-  // ✅ جلب الطلبات من Supabase
+  // ✅ جلب الطلبات من Supabase (مع تخطي الأدمن)
   const fetchOrders = async () => {
-    if (!user) return;
+    // ✅ لو أدمن (local) مش مسجل في Supabase، اتخطى
+    if (!user || user.id?.startsWith('admin-')) {
+      setOrders([]);
+      return;
+    }
 
     try {
       const { data, error: fetchError } = await supabase
@@ -98,6 +103,11 @@ export const CartProvider = ({ children }) => {
   const addToCart = async (product, quantity = 1) => {
     if (!user) {
       return { success: false, error: 'يجب تسجيل الدخول أولاً' };
+    }
+
+    // ✅ منع الأدمن من الإضافة
+    if (user.id?.startsWith('admin-')) {
+      return { success: false, error: 'لا يمكن للأدمن إضافة منتجات للعربة' };
     }
 
     try {
@@ -163,6 +173,11 @@ export const CartProvider = ({ children }) => {
       return { success: false, error: 'يجب تسجيل الدخول أولاً' };
     }
 
+    // ✅ منع الأدمن
+    if (user.id?.startsWith('admin-')) {
+      return { success: false, error: 'لا يمكن للأدمن تحديث العربة' };
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -206,6 +221,11 @@ export const CartProvider = ({ children }) => {
       return { success: false, error: 'يجب تسجيل الدخول أولاً' };
     }
 
+    // ✅ منع الأدمن
+    if (user.id?.startsWith('admin-')) {
+      return { success: false, error: 'لا يمكن للأدمن التعديل على العربة' };
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -236,6 +256,11 @@ export const CartProvider = ({ children }) => {
       return { success: false, error: 'يجب تسجيل الدخول أولاً' };
     }
 
+    // ✅ منع الأدمن
+    if (user.id?.startsWith('admin-')) {
+      return { success: false, error: 'لا يمكن للأدمن التعديل على العربة' };
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -263,6 +288,11 @@ export const CartProvider = ({ children }) => {
   const createOrder = async (orderData) => {
     if (!user) {
       return { success: false, error: 'يجب تسجيل الدخول أولاً' };
+    }
+
+    // ✅ منع الأدمن من إنشاء طلبات
+    if (user.id?.startsWith('admin-')) {
+      return { success: false, error: 'لا يمكن للأدمن إنشاء طلبات' };
     }
 
     try {
@@ -298,8 +328,10 @@ export const CartProvider = ({ children }) => {
 
       if (insertError) throw insertError;
 
-      // ✅ تحديث نقاط الولاء
-      await updateUserStats(userId, total);
+      // ✅ تحديث نقاط الولاء (لو مش أدمن)
+      if (!user.id?.startsWith('admin-')) {
+        await updateUserStats(userId, total);
+      }
 
       // ✅ تفريغ العربة بعد الطلب
       await clearCart();
@@ -320,6 +352,11 @@ export const CartProvider = ({ children }) => {
 
   // ✅ تحديث حالة الطلب
   const updateOrderStatus = async (orderId, newStatus) => {
+    // ✅ لو أدمن، اتخطى (مش هيبقى عنده طلبات)
+    if (user?.id?.startsWith('admin-')) {
+      return { success: false, error: 'لا يمكن للأدمن تحديث الطلبات' };
+    }
+
     try {
       const { error: updateError } = await supabase
         .from('orders')
@@ -350,6 +387,11 @@ export const CartProvider = ({ children }) => {
 
   // ✅ حذف طلب
   const deleteOrder = async (orderId) => {
+    // ✅ لو أدمن، اتخطى
+    if (user?.id?.startsWith('admin-')) {
+      return { success: false, error: 'لا يمكن للأدمن حذف الطلبات' };
+    }
+
     try {
       const { error: deleteError } = await supabase
         .from('orders')
@@ -422,7 +464,6 @@ export const CartProvider = ({ children }) => {
 
   // دمج العربة بعد تسجيل الدخول
   const mergeCart = async () => {
-    // تم الاستغناء عن localStorage
     await fetchCart();
   };
 
