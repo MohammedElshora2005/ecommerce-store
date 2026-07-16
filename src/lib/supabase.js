@@ -1,3 +1,5 @@
+// ecommerce-store/src/lib/supabase.js
+
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -7,6 +9,19 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.warn("⚠️ Supabase keys are missing! Check your .env file.");
 }
 
-export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '');
+// ✅ إنشاء الـ client مع خيارات إضافية
+export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '', {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true
+  },
+  global: {
+    headers: {
+      'apikey': supabaseAnonKey || '',
+      'Authorization': `Bearer ${supabaseAnonKey || ''}`
+    }
+  }
+});
 
 export default supabase;
