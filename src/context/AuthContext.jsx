@@ -97,43 +97,55 @@ export const AuthProvider = ({ children }) => {
 
     checkUser();
     
-    // ✅ الاستماع لتغيرات الـ Auth (تسجيل دخول/خروج)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (event === 'SIGNED_IN' && session?.user) {
-          // جلب بيانات المستخدم من جدول users
-          const { data: userData } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-          
-          const mergedUser = {
-            ...session.user,
-            ...userData,
-            id: session.user.id,
-            role: userData?.role || 'user',
-            loyaltyPoints: userData?.loyalty_points || 0,
-            loyaltyLevel: userData?.loyalty_level || 'برونزي'
-          };
-          
-          setUser(mergedUser);
-          setUserRole(mergedUser.role || 'user');
-          localStorage.setItem('user', JSON.stringify(mergedUser));
-        } else if (event === 'SIGNED_OUT') {
-          setUser(null);
-          setUserRole('user');
-          localStorage.removeItem('user');
+    // ✅ الاستماع لتغيرات الـ Auth مع معالجة الأخطاء
+    try {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(
+        async (event, session) => {
+          try {
+            if (event === 'SIGNED_IN' && session?.user) {
+              // جلب بيانات المستخدم من جدول users
+              const { data: userData } = await supabase
+                .from('users')
+                .select('*')
+                .eq('id', session.user.id)
+                .single();
+              
+              const mergedUser = {
+                ...session.user,
+                ...userData,
+                id: session.user.id,
+                role: userData?.role || 'user',
+                loyaltyPoints: userData?.loyalty_points || 0,
+                loyaltyLevel: userData?.loyalty_level || 'برونزي'
+              };
+              
+              setUser(mergedUser);
+              setUserRole(mergedUser.role || 'user');
+              localStorage.setItem('user', JSON.stringify(mergedUser));
+            } else if (event === 'SIGNED_OUT') {
+              setUser(null);
+              setUserRole('user');
+              localStorage.removeItem('user');
+            }
+          } catch (err) {
+            console.error('Auth state change handler error:', err);
+          }
         }
-      }
-    );
+      );
 
-    // جلب المستخدمين
-    fetchAllUsers();
+      // جلب المستخدمين
+      fetchAllUsers();
 
-    return () => {
-      subscription?.unsubscribe();
-    };
+      return () => {
+        try {
+          subscription?.unsubscribe();
+        } catch (err) {
+          console.log('Unsubscribe error:', err);
+        }
+      };
+    } catch (err) {
+      console.error('Auth state change setup error:', err);
+    }
   }, []);
 
   // ✅ تسجيل الدخول
