@@ -6,7 +6,7 @@ import { useCart } from '../hooks/useCart';
 import { useAuth } from '../hooks/useAuth';
 import ProductCard from '../components/products/ProductCard';
 import LoadingSpinner from '../components/common/LoadingSpinner';
-import { products } from '../api/products';
+import { supabase } from '../lib/supabase';
 import {
   ShoppingBagIcon,
   TruckIcon,
@@ -87,40 +87,71 @@ const HomePage = () => {
     }
   ];
 
+  // ✅ جلب المنتجات من Supabase
+  const fetchProducts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .order('id', { ascending: false });
+      
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      return [];
+    }
+  };
+
+  // ✅ جلب العروض من Supabase
+  const fetchOffers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('offers')
+        .select('*')
+        .eq('active', true)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      
+      // تصفية العروض النشطة حسب التاريخ
+      const now = new Date();
+      return (data || []).filter(offer => {
+        const start = new Date(offer.start_date);
+        const end = new Date(offer.end_date);
+        return now >= start && now <= end;
+      });
+    } catch (error) {
+      console.error('Error fetching offers:', error);
+      return [];
+    }
+  };
+
   // جلب المنتجات والعروض
   useEffect(() => {
-    const fetchData = () => {
+    const fetchData = async () => {
       setLoading(true);
       try {
-        setTimeout(() => {
-          // منتجات مميزة (أعلى تقييم)
-          const featured = [...products]
-            .sort((a, b) => b.rating - a.rating)
-            .slice(0, 8);
-          
-          // أحدث المنتجات (أعلى ID)
-          const newest = [...products]
-            .sort((a, b) => b.id - a.id)
-            .slice(0, 8);
+        const productsData = await fetchProducts();
+        
+        // منتجات مميزة (أعلى تقييم)
+        const featured = [...productsData]
+          .sort((a, b) => (b.rating || 0) - (a.rating || 0))
+          .slice(0, 8);
+        
+        // أحدث المنتجات (أعلى ID)
+        const newest = [...productsData]
+          .sort((a, b) => (b.id || 0) - (a.id || 0))
+          .slice(0, 8);
 
-          setFeaturedProducts(featured);
-          setNewProducts(newest);
+        setFeaturedProducts(featured);
+        setNewProducts(newest);
 
-          // ✅ تحميل العروض النشطة من localStorage
-          const savedOffers = localStorage.getItem('offers');
-          if (savedOffers) {
-            const allOffers = JSON.parse(savedOffers);
-            const now = new Date();
-            const activeOffers = allOffers.filter(offer => {
-              const start = new Date(offer.startDate);
-              const end = new Date(offer.endDate);
-              return offer.active && now >= start && now <= end;
-            });
-            setOffers(activeOffers);
-          }
+        // جلب العروض
+        const offersData = await fetchOffers();
+        setOffers(offersData);
 
-          setLoading(false);
-        }, 1000);
+        setLoading(false);
       } catch (error) {
         console.error('Error fetching data:', error);
         setLoading(false);
@@ -166,8 +197,8 @@ const HomePage = () => {
   const getBestOffer = () => {
     if (offers.length === 0) return null;
     return offers.reduce((best, current) => {
-      const currentDiscount = current.discountValue || 0;
-      const bestDiscount = best?.discountValue || 0;
+      const currentDiscount = current.discount_value || 0;
+      const bestDiscount = best?.discount_value || 0;
       return currentDiscount > bestDiscount ? current : best;
     }, null);
   };
@@ -277,7 +308,7 @@ const HomePage = () => {
         </section>
       )}
 
-      {/* ✅ عرض العروض الخاصة (ديناميكي) */}
+      {/* عرض العروض الخاصة */}
       {offers.length > 0 && (
         <section className="py-12">
           <div className="container mx-auto px-4">
@@ -296,18 +327,18 @@ const HomePage = () => {
                   {bestOffer?.description || 'احصل على خصم 20% عند شراء منتجين أو أكثر. العرض ساري حتى نهاية الشهر.'}
                 </p>
                 
-                {/* ✅ تفاصيل العرض */}
+                {/* تفاصيل العرض */}
                 {bestOffer && (
                   <div className="flex flex-wrap items-center gap-4 mb-6 bg-white/10 dark:bg-white/5 backdrop-blur-sm rounded-xl p-4">
                     <div className="flex items-center gap-2">
                       <span className="text-2xl font-bold text-yellow-300 dark:text-yellow-400">
-                        {bestOffer.discountType === 'percentage' ? `${bestOffer.discountValue}%` : `${bestOffer.offerPrice} ج.م`}
+                        {bestOffer.discount_type === 'percentage' ? `${bestOffer.discount_value}%` : `${bestOffer.offer_price} ج.م`}
                       </span>
                       <span className="text-sm text-white/70">خصم</span>
                     </div>
-                    {bestOffer.minOrder > 0 && (
+                    {bestOffer.min_order > 0 && (
                       <div className="text-sm text-white/70">
-                        الحد الأدنى: {bestOffer.minOrder} ج.م
+                        الحد الأدنى: {bestOffer.min_order} ج.م
                       </div>
                     )}
                     <div className="text-sm text-white/70 flex items-center gap-1">
@@ -319,39 +350,6 @@ const HomePage = () => {
                 
                 <Link
                   to="/offers"
-                  className="inline-block px-8 py-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-lg font-medium hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors shadow-lg"
-                >
-                  استفد من العرض
-                </Link>
-              </div>
-              <div className="absolute top-0 right-0 opacity-10">
-                <TagIcon className="h-64 w-64 text-white" />
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* ✅ لو مفيش عروض، نعرض البانر الافتراضي */}
-      {offers.length === 0 && (
-        <section className="py-12">
-          <div className="container mx-auto px-4">
-            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-purple-600 to-pink-600 dark:from-purple-800 dark:to-pink-900 p-8 md:p-12">
-              <div className="max-w-2xl text-white">
-                <div className="flex items-center gap-2 mb-3">
-                  <TagIcon className="h-6 w-6 text-yellow-300 dark:text-yellow-400" />
-                  <span className="text-sm font-semibold text-yellow-300 dark:text-yellow-400 uppercase tracking-wider">
-                    عرض خاص
-                  </span>
-                </div>
-                <h2 className="text-3xl md:text-4xl font-bold mb-4">
-                  عروض خاصة لفترة محدودة
-                </h2>
-                <p className="text-lg opacity-90 mb-6">
-                  احصل على خصم 20% عند شراء منتجين أو أكثر. العرض ساري حتى نهاية الشهر.
-                </p>
-                <Link
-                  to="/products"
                   className="inline-block px-8 py-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-lg font-medium hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors shadow-lg"
                 >
                   استفد من العرض
