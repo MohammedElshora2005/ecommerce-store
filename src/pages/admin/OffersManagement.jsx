@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { supabase } from '../../lib/supabase';
 import {
   TagIcon,
   PlusIcon,
@@ -58,47 +59,58 @@ const OffersManagement = () => {
     rating: 0
   });
 
-  // تحميل البيانات من localStorage
+  // ✅ جلب العروض من Supabase
+  const fetchOffers = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('offers')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setOffers(data || []);
+    } catch (error) {
+      console.error('Error fetching offers:', error);
+      toast.error('❌ حدث خطأ أثناء تحميل العروض');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // تحميل البيانات
   useEffect(() => {
     if (!isAdmin) {
       navigate('/');
       return;
     }
 
-    const savedOffers = localStorage.getItem('offers');
-    if (savedOffers) {
-      setOffers(JSON.parse(savedOffers));
-    } else {
-      setOffers([]);
-    }
-    
-    // ✅ تحميل التصنيفات والماركات من المنتجات
+    fetchOffers();
     loadCategoriesAndBrands();
-    
-    setLoading(false);
   }, [isAdmin, navigate]);
 
-  // ✅ تحميل التصنيفات والماركات من localStorage أو المنتجات
-  const loadCategoriesAndBrands = () => {
-    // محاولة جلب التصنيفات من localStorage
-    const savedCategories = localStorage.getItem('productCategories');
-    const savedBrands = localStorage.getItem('productBrands');
-    
-    if (savedCategories) {
-      setCategories(JSON.parse(savedCategories));
-    } else {
-      // بيانات افتراضية
-      const defaultCategories = ['إلكترونيات', 'ساعات ذكية', 'هواتف', 'ملابس وأحذية', 'إكسسوارات', 'أجهزة منزلية'];
-      setCategories(defaultCategories);
-      localStorage.setItem('productCategories', JSON.stringify(defaultCategories));
-    }
-    
-    if (savedBrands) {
-      setBrands(JSON.parse(savedBrands));
-    } else {
-      const defaultBrands = ['Apple', 'Samsung', 'Sony', 'Xiaomi', 'Nike', 'Adidas', 'LG', 'Canon', 'Garmin', 'JBL', 'Logitech', 'Oculus', 'Anker', 'Fossil'];
-      setBrands(defaultBrands);
-      localStorage.setItem('productBrands', JSON.stringify(defaultBrands));
+  // ✅ تحميل التصنيفات والماركات من Supabase
+  const loadCategoriesAndBrands = async () => {
+    try {
+      // جلب التصنيفات من المنتجات
+      const { data: productsData } = await supabase
+        .from('products')
+        .select('category')
+        .not('category', 'is', null);
+      
+      const uniqueCategories = [...new Set(productsData?.map(p => p.category).filter(Boolean) || [])];
+      setCategories(uniqueCategories.length > 0 ? uniqueCategories : ['إلكترونيات', 'ساعات ذكية', 'هواتف', 'ملابس وأحذية', 'إكسسوارات', 'أجهزة منزلية']);
+      
+      // جلب الماركات من المنتجات
+      const { data: brandsData } = await supabase
+        .from('products')
+        .select('brand')
+        .not('brand', 'is', null);
+      
+      const uniqueBrands = [...new Set(brandsData?.map(p => p.brand).filter(Boolean) || [])];
+      setBrands(uniqueBrands.length > 0 ? uniqueBrands : ['Apple', 'Samsung', 'Sony', 'Xiaomi', 'Nike', 'Adidas', 'LG', 'Canon', 'Garmin', 'JBL', 'Logitech', 'Oculus', 'Anker', 'Fossil']);
+    } catch (error) {
+      console.error('Error loading categories/brands:', error);
     }
   };
 
@@ -114,7 +126,6 @@ const OffersManagement = () => {
     }
     const updatedCategories = [...categories, newCategory.trim()];
     setCategories(updatedCategories);
-    localStorage.setItem('productCategories', JSON.stringify(updatedCategories));
     setFormData({ ...formData, category: newCategory.trim() });
     setNewCategory('');
     setShowNewCategoryInput(false);
@@ -133,16 +144,10 @@ const OffersManagement = () => {
     }
     const updatedBrands = [...brands, newBrand.trim()];
     setBrands(updatedBrands);
-    localStorage.setItem('productBrands', JSON.stringify(updatedBrands));
     setFormData({ ...formData, brand: newBrand.trim() });
     setNewBrand('');
     setShowNewBrandInput(false);
     toast.success('✅ تم إضافة الماركة الجديدة');
-  };
-
-  const saveOffers = (newOffers) => {
-    setOffers(newOffers);
-    localStorage.setItem('offers', JSON.stringify(newOffers));
   };
 
   // ✅ حساب نسبة الخصم تلقائياً
@@ -152,7 +157,8 @@ const OffersManagement = () => {
     return Math.round(discount);
   };
 
-  const handleAddOffer = () => {
+  // ✅ إضافة عرض
+  const handleAddOffer = async () => {
     if (!formData.name || !formData.offerPrice || !formData.startDate || !formData.endDate) {
       toast.warning('⚠️ من فضلك املأ جميع الحقول المطلوبة');
       return;
@@ -163,18 +169,6 @@ const OffersManagement = () => {
       return;
     }
 
-    // ✅ إضافة التصنيف والماركة للقوائم لو مش موجودة
-    if (formData.category && !categories.includes(formData.category)) {
-      const updatedCategories = [...categories, formData.category];
-      setCategories(updatedCategories);
-      localStorage.setItem('productCategories', JSON.stringify(updatedCategories));
-    }
-    if (formData.brand && !brands.includes(formData.brand)) {
-      const updatedBrands = [...brands, formData.brand];
-      setBrands(updatedBrands);
-      localStorage.setItem('productBrands', JSON.stringify(updatedBrands));
-    }
-
     const discountPercent = calculateDiscountPercentage(
       parseFloat(formData.originalPrice),
       parseFloat(formData.offerPrice)
@@ -182,23 +176,42 @@ const OffersManagement = () => {
 
     const newOffer = {
       id: `OFF-${Date.now().toString().slice(-6)}`,
-      ...formData,
-      discountValue: discountPercent > 0 ? discountPercent : parseFloat(formData.discountValue) || 0,
-      originalPrice: parseFloat(formData.originalPrice) || 0,
-      offerPrice: parseFloat(formData.offerPrice),
-      minOrder: parseFloat(formData.minOrder) || 0,
+      name: formData.name,
+      description: formData.description || '',
+      image: formData.image || '',
+      discount_type: formData.discountType || 'percentage',
+      discount_value: discountPercent > 0 ? discountPercent : parseFloat(formData.discountValue) || 0,
+      original_price: parseFloat(formData.originalPrice) || 0,
+      offer_price: parseFloat(formData.offerPrice),
+      min_order: parseFloat(formData.minOrder) || 0,
       stock: parseInt(formData.stock) || 0,
-      rating: parseFloat(formData.rating) || 0,
-      createdAt: new Date().toISOString().split('T')[0]
+      start_date: formData.startDate,
+      end_date: formData.endDate,
+      active: true,
+      category: formData.category || '',
+      brand: formData.brand || '',
+      rating: parseFloat(formData.rating) || 0
     };
 
-    saveOffers([newOffer, ...offers]);
-    setShowAddModal(false);
-    resetForm();
-    toast.success('✅ تم إضافة العرض بنجاح');
+    try {
+      const { error } = await supabase
+        .from('offers')
+        .insert([newOffer]);
+      
+      if (error) throw error;
+      
+      toast.success('✅ تم إضافة العرض بنجاح');
+      setShowAddModal(false);
+      resetForm();
+      fetchOffers();
+    } catch (error) {
+      console.error('Error adding offer:', error);
+      toast.error('❌ حدث خطأ أثناء إضافة العرض');
+    }
   };
 
-  const handleEditOffer = () => {
+  // ✅ تعديل عرض
+  const handleEditOffer = async () => {
     if (!formData.name || !formData.offerPrice || !formData.startDate || !formData.endDate) {
       toast.warning('⚠️ من فضلك املأ جميع الحقول المطلوبة');
       return;
@@ -209,40 +222,80 @@ const OffersManagement = () => {
       parseFloat(formData.offerPrice)
     );
 
-    const updatedOffers = offers.map(offer =>
-      offer.id === editingOffer.id
-        ? {
-            ...offer,
-            ...formData,
-            discountValue: discountPercent > 0 ? discountPercent : parseFloat(formData.discountValue) || 0,
-            originalPrice: parseFloat(formData.originalPrice) || 0,
-            offerPrice: parseFloat(formData.offerPrice),
-            minOrder: parseFloat(formData.minOrder) || 0,
-            stock: parseInt(formData.stock) || 0,
-            rating: parseFloat(formData.rating) || 0
-          }
-        : offer
-    );
+    const updatedOffer = {
+      name: formData.name,
+      description: formData.description || '',
+      image: formData.image || '',
+      discount_type: formData.discountType || 'percentage',
+      discount_value: discountPercent > 0 ? discountPercent : parseFloat(formData.discountValue) || 0,
+      original_price: parseFloat(formData.originalPrice) || 0,
+      offer_price: parseFloat(formData.offerPrice),
+      min_order: parseFloat(formData.minOrder) || 0,
+      stock: parseInt(formData.stock) || 0,
+      start_date: formData.startDate,
+      end_date: formData.endDate,
+      active: formData.active,
+      category: formData.category || '',
+      brand: formData.brand || '',
+      rating: parseFloat(formData.rating) || 0
+    };
 
-    saveOffers(updatedOffers);
-    setEditingOffer(null);
-    resetForm();
-    toast.success('✅ تم تحديث العرض بنجاح');
+    try {
+      const { error } = await supabase
+        .from('offers')
+        .update(updatedOffer)
+        .eq('id', editingOffer.id);
+      
+      if (error) throw error;
+      
+      toast.success('✅ تم تحديث العرض بنجاح');
+      setEditingOffer(null);
+      resetForm();
+      fetchOffers();
+    } catch (error) {
+      console.error('Error updating offer:', error);
+      toast.error('❌ حدث خطأ أثناء تحديث العرض');
+    }
   };
 
-  const handleDeleteOffer = () => {
-    const updatedOffers = offers.filter(offer => offer.id !== showDeleteConfirm);
-    saveOffers(updatedOffers);
-    setShowDeleteConfirm(null);
-    toast.success('✅ تم حذف العرض بنجاح');
+  // ✅ حذف عرض
+  const handleDeleteOffer = async () => {
+    try {
+      const { error } = await supabase
+        .from('offers')
+        .delete()
+        .eq('id', showDeleteConfirm);
+      
+      if (error) throw error;
+      
+      toast.success('✅ تم حذف العرض بنجاح');
+      setShowDeleteConfirm(null);
+      fetchOffers();
+    } catch (error) {
+      console.error('Error deleting offer:', error);
+      toast.error('❌ حدث خطأ أثناء حذف العرض');
+    }
   };
 
-  const toggleOfferStatus = (offerId) => {
-    const updatedOffers = offers.map(offer =>
-      offer.id === offerId ? { ...offer, active: !offer.active } : offer
-    );
-    saveOffers(updatedOffers);
-    toast.success(updatedOffers.find(o => o.id === offerId).active ? '✅ تم تفعيل العرض' : '⏸️ تم إيقاف العرض');
+  // ✅ تغيير حالة العرض
+  const toggleOfferStatus = async (offerId) => {
+    const offer = offers.find(o => o.id === offerId);
+    if (!offer) return;
+
+    try {
+      const { error } = await supabase
+        .from('offers')
+        .update({ active: !offer.active })
+        .eq('id', offerId);
+      
+      if (error) throw error;
+      
+      toast.success(!offer.active ? '✅ تم تفعيل العرض' : '⏸️ تم إيقاف العرض');
+      fetchOffers();
+    } catch (error) {
+      console.error('Error toggling offer status:', error);
+      toast.error('❌ حدث خطأ أثناء تغيير حالة العرض');
+    }
   };
 
   const resetForm = () => {
@@ -275,14 +328,14 @@ const OffersManagement = () => {
       name: offer.name,
       description: offer.description || '',
       image: offer.image || '',
-      discountType: offer.discountType || 'percentage',
-      discountValue: offer.discountValue || '',
-      originalPrice: offer.originalPrice || '',
-      offerPrice: offer.offerPrice,
-      minOrder: offer.minOrder || '',
+      discountType: offer.discount_type || 'percentage',
+      discountValue: offer.discount_value || '',
+      originalPrice: offer.original_price || '',
+      offerPrice: offer.offer_price,
+      minOrder: offer.min_order || '',
       stock: offer.stock || '',
-      startDate: offer.startDate,
-      endDate: offer.endDate,
+      startDate: offer.start_date,
+      endDate: offer.end_date,
       active: offer.active,
       category: offer.category || '',
       brand: offer.brand || '',
@@ -426,16 +479,16 @@ const OffersManagement = () => {
                       </td>
                       <td className="px-4 py-3">
                         <div>
-                          <span className="text-sm font-bold text-rose-600 dark:text-rose-400">{formatPrice(offer.offerPrice)}</span>
-                          {offer.originalPrice > 0 && (
-                            <span className="text-xs text-gray-400 line-through mr-2">{formatPrice(offer.originalPrice)}</span>
+                          <span className="text-sm font-bold text-rose-600 dark:text-rose-400">{formatPrice(offer.offer_price)}</span>
+                          {offer.original_price > 0 && (
+                            <span className="text-xs text-gray-400 line-through mr-2">{formatPrice(offer.original_price)}</span>
                           )}
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        {offer.discountValue > 0 ? (
+                        {offer.discount_value > 0 ? (
                           <span className="text-sm font-bold text-green-600 dark:text-green-400">
-                            {offer.discountValue}%
+                            {offer.discount_value}%
                           </span>
                         ) : (
                           <span className="text-sm text-gray-400">-</span>
@@ -447,8 +500,8 @@ const OffersManagement = () => {
                         {offer.stock > 0 ? offer.stock : 'غير محدود'}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
-                        <div>{formatDate(offer.startDate)}</div>
-                        <div className="text-xs text-gray-400 dark:text-gray-500">→ {formatDate(offer.endDate)}</div>
+                        <div>{formatDate(offer.start_date)}</div>
+                        <div className="text-xs text-gray-400 dark:text-gray-500">→ {formatDate(offer.end_date)}</div>
                       </td>
                       <td className="px-4 py-3">
                         <button
@@ -488,7 +541,7 @@ const OffersManagement = () => {
         </div>
       </div>
 
-      {/* ✅ مودال إضافة/تعديل مع التصنيفات والماركات */}
+      {/* مودال إضافة/تعديل */}
       {(showAddModal || editingOffer) && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
@@ -553,7 +606,7 @@ const OffersManagement = () => {
                 />
               </div>
 
-              {/* ✅ التصنيف - قائمة منسدلة مع إضافة جديد */}
+              {/* التصنيف */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">التصنيف</label>
                 <div className="flex gap-2">
@@ -608,7 +661,7 @@ const OffersManagement = () => {
                 )}
               </div>
 
-              {/* ✅ الماركة - قائمة منسدلة مع إضافة جديد */}
+              {/* الماركة */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">الماركة</label>
                 <div className="flex gap-2">
@@ -690,7 +743,7 @@ const OffersManagement = () => {
                 </div>
               </div>
 
-              {/* ✅ نسبة الخصم (تظهر تلقائياً) */}
+              {/* نسبة الخصم */}
               {formData.originalPrice && formData.offerPrice && (
                 <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-2 text-center">
                   <span className="text-sm text-green-700 dark:text-green-400">
