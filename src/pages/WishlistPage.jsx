@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useCart } from '../hooks/useCart';
+import { supabase } from '../lib/supabase';
 import {
   HeartIcon,
   HeartIcon as HeartSolidIcon,
@@ -19,32 +20,49 @@ const WishlistPage = () => {
   const [wishlist, setWishlist] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // تحميل المفضلة من localStorage
+  // ✅ جلب المنتجات من Supabase حسب الـ wishlist
   useEffect(() => {
-    if (!isAuthenticated) return;
+    const fetchWishlist = async () => {
+      if (!isAuthenticated) {
+        setLoading(false);
+        return;
+      }
 
-    try {
-      const saved = localStorage.getItem('wishlist');
-      if (saved) {
-        // محاكاة جلب المنتجات من API
-        const wishlistIds = JSON.parse(saved);
-        // هنستخدم products من api/products
-        import('../api/products').then(({ products }) => {
-          const items = products.filter(p => wishlistIds.includes(p.id));
-          setWishlist(items);
+      try {
+        const saved = localStorage.getItem('wishlist');
+        if (!saved) {
+          setWishlist([]);
           setLoading(false);
-        });
-      } else {
-        setWishlist([]);
+          return;
+        }
+
+        const wishlistIds = JSON.parse(saved);
+        if (wishlistIds.length === 0) {
+          setWishlist([]);
+          setLoading(false);
+          return;
+        }
+
+        // ✅ جلب المنتجات من Supabase
+        const { data, error } = await supabase
+          .from('products')
+          .select('*')
+          .in('id', wishlistIds);
+
+        if (error) throw error;
+        setWishlist(data || []);
+      } catch (error) {
+        console.error('Error fetching wishlist:', error);
+        toast.error('❌ حدث خطأ أثناء تحميل المفضلة');
+      } finally {
         setLoading(false);
       }
-    } catch (error) {
-      console.error('Error loading wishlist:', error);
-      setLoading(false);
-    }
+    };
+
+    fetchWishlist();
   }, [isAuthenticated]);
 
-  // إزالة من المفضلة
+  // ✅ إزالة من المفضلة
   const removeFromWishlist = (productId) => {
     const newWishlist = wishlist.filter(item => item.id !== productId);
     setWishlist(newWishlist);
@@ -113,9 +131,10 @@ const WishlistPage = () => {
                 <Link to={`/product/${product.id}`}>
                   <div className="aspect-square bg-gray-100 overflow-hidden">
                     <img
-                      src={product.image}
+                      src={product.image || `https://picsum.photos/seed/${product.id}/400/400`}
                       alt={product.name}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      onError={(e) => e.target.src = `https://picsum.photos/seed/${product.id}/400/400`}
                     />
                   </div>
                 </Link>
