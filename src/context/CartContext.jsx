@@ -2,6 +2,7 @@
 
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { useAuth } from './AuthContext';
+import { supabase } from '../lib/supabase';
 
 // إنشاء Context
 const CartContext = createContext();
@@ -22,67 +23,83 @@ export const CartProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [orders, setOrders] = useState([]);
 
-  // ✅ قائمة الطلبات (فاضية في البداية)
-  const [orders, setOrders] = useState(() => {
-    const saved = localStorage.getItem('orders');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  // حفظ الطلبات في localStorage
-  useEffect(() => {
-    localStorage.setItem('orders', JSON.stringify(orders));
-  }, [orders]);
-
-  // جلب عربة المستخدم عند تسجيل الدخول أو تغيير المستخدم
-  useEffect(() => {
-    loadCartFromLocalStorage();
-  }, [user, isAuthenticated]);
-
-  // جلب العربة (محاكاة)
+  // ✅ جلب العربة من Supabase
   const fetchCart = async () => {
+    if (!user) {
+      setCartItems([]);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
-      
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      loadCartFromLocalStorage();
-      
+
+      const { data, error: fetchError } = await supabase
+        .from('cart')
+        .select(`
+          product_id,
+          quantity,
+          products (*)
+        `)
+        .eq('user_id', user.id);
+
+      if (fetchError) throw fetchError;
+
+      if (data) {
+        const items = data.map(item => ({
+          ...item.products,
+          quantity: item.quantity,
+          cartId: item.product_id
+        }));
+        setCartItems(items);
+      } else {
+        setCartItems([]);
+      }
     } catch (error) {
       console.error('Error fetching cart:', error);
       setError(error.message);
-      loadCartFromLocalStorage();
     } finally {
       setLoading(false);
     }
   };
 
-  // جلب العربة من localStorage
-  const loadCartFromLocalStorage = () => {
+  // ✅ جلب الطلبات من Supabase
+  const fetchOrders = async () => {
+    if (!user) return;
+
     try {
-      const savedCart = localStorage.getItem('cart');
-      if (savedCart) {
-        setCartItems(JSON.parse(savedCart));
-      } else {
-        setCartItems([]);
-      }
+      const { data, error: fetchError } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (fetchError) throw fetchError;
+      setOrders(data || []);
     } catch (error) {
-      console.error('Error loading cart from localStorage:', error);
+      console.error('Error fetching orders:', error);
+    }
+  };
+
+  // تحميل البيانات عند تسجيل الدخول
+  useEffect(() => {
+    if (user) {
+      fetchCart();
+      fetchOrders();
+    } else {
       setCartItems([]);
+      setOrders([]);
     }
-  };
+  }, [user]);
 
-  // حفظ العربة في localStorage
-  const saveCartToLocalStorage = (items) => {
-    try {
-      localStorage.setItem('cart', JSON.stringify(items));
-    } catch (error) {
-      console.error('Error saving cart to localStorage:', error);
-    }
-  };
-
-  // إضافة منتج للعربة
+  // ✅ إضافة منتج للعربة
   const addToCart = async (product, quantity = 1) => {
+    if (!user) {
+      return { success: false, error: 'يجب تسجيل الدخول أولاً' };
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -91,39 +108,46 @@ export const CartProvider = ({ children }) => {
         throw new Error('المخزون غير كافٍ');
       }
 
-      const existingItem = cartItems.find(item => item.id === product.id);
+      // التحقق من وجود المنتج في العربة
+      const { data: existing, error: checkError } = await supabase
+        .from('cart')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('product_id', product.id)
+        .single();
 
-      if (existingItem) {
-        const newQuantity = existingItem.quantity + quantity;
-        
+      if (checkError && checkError.code !== 'PGRST116') throw checkError;
+
+      if (existing) {
+        // تحديث الكمية
+        const newQuantity = existing.quantity + quantity;
         if (product.stock < newQuantity) {
           throw new Error('المخزون غير كافٍ');
         }
 
-        const updatedItems = cartItems.map(item =>
-          item.id === product.id
-            ? { ...item, quantity: newQuantity }
-            : item
-        );
-        setCartItems(updatedItems);
-        saveCartToLocalStorage(updatedItems);
-        
-        return { success: true, message: 'تم تحديث الكمية' };
-      } else {
-        const newItem = {
-          ...product,
-          quantity: quantity,
-          cartId: Date.now()
-        };
+        const { error: updateError } = await supabase
+          .from('cart')
+          .update({ quantity: newQuantity })
+          .eq('id', existing.id);
 
-        const updatedItems = [...cartItems, newItem];
-        setCartItems(updatedItems);
-        saveCartToLocalStorage(updatedItems);
-        
-        setIsCartOpen(true);
-        
-        return { success: true, message: 'تمت الإضافة للعربة' };
+        if (updateError) throw updateError;
+      } else {
+        // إضافة منتج جديد
+        const { error: insertError } = await supabase
+          .from('cart')
+          .insert({
+            user_id: user.id,
+            product_id: product.id,
+            quantity: quantity
+          });
+
+        if (insertError) throw insertError;
       }
+
+      await fetchCart();
+      setIsCartOpen(true);
+      return { success: true, message: 'تمت الإضافة للعربة' };
+
     } catch (error) {
       console.error('Error adding to cart:', error);
       setError(error.message);
@@ -133,124 +157,12 @@ export const CartProvider = ({ children }) => {
     }
   };
 
-  // ✅ إنشاء طلب جديد (مع ربطه بـ userId ونقاط الولاء)
-  const createOrder = async (orderData) => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const total = getTotalPrice();
-
-      // ✅ استخدام userId من orderData أو من user
-      const userId = orderData.userId || user?.id || Date.now().toString();
-      const userName = orderData.customerName || user?.name || user?.user_metadata?.name || 'مستخدم';
-      const userEmail = orderData.email || user?.email || 'unknown@example.com';
-
-      console.log('📦 Creating order for userId:', userId);
-
-      const newOrder = {
-        id: `ORD-${Date.now().toString().slice(-8)}-${Math.floor(Math.random() * 1000)}`,
-        customer: userName,
-        email: userEmail,
-        phone: orderData.phone || '',
-        date: new Date().toISOString().split('T')[0],
-        status: 'pending',
-        total: orderData.total || total,
-        items: cartItems.map(item => ({
-          name: item.name,
-          quantity: item.quantity,
-          price: item.price
-        })),
-        address: orderData.address || 'عنوان غير محدد',
-        userId: userId,
-        notes: orderData.notes || '',
-        shippingMethod: orderData.shippingMethod || 'standard',
-        paymentMethod: orderData.paymentMethod || 'cash',
-        loyaltyPointsEarned: 0,
-        loyaltyPointsApplied: false
-      };
-
-      console.log('✅ New order created:', newOrder);
-
-      setOrders(prev => [newOrder, ...prev]);
-      
-      // ✅ تفريغ العربة بعد الطلب
-      setCartItems([]);
-      saveCartToLocalStorage([]);
-
-      return { success: true, order: newOrder };
-    } catch (error) {
-      console.error('Error creating order:', error);
-      setError(error.message);
-      return { success: false, error: error.message };
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ✅✅✅ تحديث حالة الطلب (مع حساب نقاط الولاء عند تغيير الحالة) ✅✅✅
-  const updateOrderStatus = (orderId, newStatus) => {
-    console.log('🔄 Updating order status:', orderId, '->', newStatus);
-    
-    // جلب الطلبات
-    let orders = JSON.parse(localStorage.getItem('orders') || '[]');
-    let updatedOrders = orders.map(order => {
-      if (order.id === orderId) {
-        const oldStatus = order.status;
-        
-        // ✅ إذا تغيرت الحالة من pending لغير pending
-        if (oldStatus === 'pending' && newStatus !== 'pending' && newStatus !== 'cancelled' && !order.loyaltyPointsApplied) {
-          console.log('✅ Order completed! Calculating loyalty points...');
-          
-          // حساب نقاط الولاء
-          const pointsEarned = Math.floor(order.total / 100) * 10;
-          
-          // ✅ تحديث نقاط المستخدم
-          if (user) {
-            console.log('👤 Updating user stats for:', user.id);
-            updateUserStats(user.id, order.total);
-          }
-          
-          return {
-            ...order,
-            status: newStatus,
-            loyaltyPointsEarned: pointsEarned,
-            loyaltyPointsApplied: true
-          };
-        }
-        
-        return { ...order, status: newStatus };
-      }
-      return order;
-    });
-    
-    // حفظ الطلبات
-    localStorage.setItem('orders', JSON.stringify(updatedOrders));
-    setOrders(updatedOrders);
-    console.log('✅ Orders updated:', updatedOrders);
-  };
-
-  // ✅ حذف طلب
-  const deleteOrder = (orderId) => {
-    setOrders(prev => {
-      const updated = prev.filter(order => order.id !== orderId);
-      localStorage.setItem('orders', JSON.stringify(updated));
-      return updated;
-    });
-  };
-
-  // ✅ جلب كل الطلبات
-  const getOrders = () => {
-    return orders;
-  };
-
-  // ✅ جلب طلبات مستخدم معين
-  const getUserOrders = (userId) => {
-    return orders.filter(order => order.userId === userId);
-  };
-
-  // تحديث كمية منتج في العربة
+  // ✅ تحديث كمية منتج في العربة
   const updateQuantity = async (productId, quantity) => {
+    if (!user) {
+      return { success: false, error: 'يجب تسجيل الدخول أولاً' };
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -268,15 +180,17 @@ export const CartProvider = ({ children }) => {
         throw new Error('المخزون غير كافٍ');
       }
 
-      const updatedItems = cartItems.map(item =>
-        item.id === productId
-          ? { ...item, quantity }
-          : item
-      );
-      setCartItems(updatedItems);
-      saveCartToLocalStorage(updatedItems);
+      const { error: updateError } = await supabase
+        .from('cart')
+        .update({ quantity })
+        .eq('user_id', user.id)
+        .eq('product_id', productId);
 
+      if (updateError) throw updateError;
+
+      await fetchCart();
       return { success: true };
+
     } catch (error) {
       console.error('Error updating quantity:', error);
       setError(error.message);
@@ -286,22 +200,27 @@ export const CartProvider = ({ children }) => {
     }
   };
 
-  // حذف منتج من العربة
+  // ✅ حذف منتج من العربة
   const removeFromCart = async (productId) => {
+    if (!user) {
+      return { success: false, error: 'يجب تسجيل الدخول أولاً' };
+    }
+
     try {
       setLoading(true);
       setError(null);
 
-      const item = cartItems.find(item => item.id === productId);
-      if (!item) {
-        throw new Error('المنتج غير موجود في العربة');
-      }
+      const { error: deleteError } = await supabase
+        .from('cart')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('product_id', productId);
 
-      const updatedItems = cartItems.filter(item => item.id !== productId);
-      setCartItems(updatedItems);
-      saveCartToLocalStorage(updatedItems);
+      if (deleteError) throw deleteError;
 
+      await fetchCart();
       return { success: true };
+
     } catch (error) {
       console.error('Error removing from cart:', error);
       setError(error.message);
@@ -311,16 +230,26 @@ export const CartProvider = ({ children }) => {
     }
   };
 
-  // تفريغ العربة بالكامل
+  // ✅ تفريغ العربة بالكامل
   const clearCart = async () => {
+    if (!user) {
+      return { success: false, error: 'يجب تسجيل الدخول أولاً' };
+    }
+
     try {
       setLoading(true);
       setError(null);
 
-      setCartItems([]);
-      saveCartToLocalStorage([]);
+      const { error: deleteError } = await supabase
+        .from('cart')
+        .delete()
+        .eq('user_id', user.id);
 
+      if (deleteError) throw deleteError;
+
+      setCartItems([]);
       return { success: true };
+
     } catch (error) {
       console.error('Error clearing cart:', error);
       setError(error.message);
@@ -328,6 +257,124 @@ export const CartProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // ✅ إنشاء طلب جديد
+  const createOrder = async (orderData) => {
+    if (!user) {
+      return { success: false, error: 'يجب تسجيل الدخول أولاً' };
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      const total = getTotalPrice();
+      const userId = orderData.userId || user.id;
+
+      const newOrder = {
+        id: `ORD-${Date.now().toString().slice(-8)}-${Math.floor(Math.random() * 1000)}`,
+        customer: orderData.customerName || user.user_metadata?.name || 'مستخدم',
+        email: orderData.email || user.email,
+        phone: orderData.phone || '',
+        date: new Date().toISOString().split('T')[0],
+        status: 'pending',
+        total: orderData.total || total,
+        items: cartItems.map(item => ({
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price
+        })),
+        address: orderData.address || 'عنوان غير محدد',
+        user_id: userId,
+        notes: orderData.notes || '',
+        shipping_method: orderData.shippingMethod || 'standard',
+        payment_method: orderData.paymentMethod || 'cash'
+      };
+
+      const { error: insertError } = await supabase
+        .from('orders')
+        .insert([newOrder]);
+
+      if (insertError) throw insertError;
+
+      // ✅ تحديث نقاط الولاء
+      await updateUserStats(userId, total);
+
+      // ✅ تفريغ العربة بعد الطلب
+      await clearCart();
+
+      // ✅ تحديث قائمة الطلبات
+      await fetchOrders();
+
+      return { success: true, order: newOrder };
+
+    } catch (error) {
+      console.error('Error creating order:', error);
+      setError(error.message);
+      return { success: false, error: error.message };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ✅ تحديث حالة الطلب
+  const updateOrderStatus = async (orderId, newStatus) => {
+    try {
+      const { error: updateError } = await supabase
+        .from('orders')
+        .update({ status: newStatus })
+        .eq('id', orderId);
+
+      if (updateError) throw updateError;
+
+      // ✅ جلب الطلب لتحديث نقاط الولاء
+      const { data: orderData } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', orderId)
+        .single();
+
+      if (orderData && newStatus !== 'pending' && newStatus !== 'cancelled') {
+        await updateUserStats(orderData.user_id, orderData.total);
+      }
+
+      await fetchOrders();
+      return { success: true };
+
+    } catch (error) {
+      console.error('Error updating order status:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  // ✅ حذف طلب
+  const deleteOrder = async (orderId) => {
+    try {
+      const { error: deleteError } = await supabase
+        .from('orders')
+        .delete()
+        .eq('id', orderId);
+
+      if (deleteError) throw deleteError;
+
+      await fetchOrders();
+      return { success: true };
+
+    } catch (error) {
+      console.error('Error deleting order:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  // ✅ جلب كل الطلبات
+  const getOrders = () => {
+    return orders;
+  };
+
+  // ✅ جلب طلبات مستخدم معين
+  const getUserOrders = (userId) => {
+    return orders.filter(order => order.user_id === userId);
   };
 
   // ✅ حساب إجمالي عدد المنتجات
@@ -373,29 +420,10 @@ export const CartProvider = ({ children }) => {
     return item ? item.quantity : 0;
   };
 
-  // دمج العربة بعد تسجيل الدخول (محاكاة)
+  // دمج العربة بعد تسجيل الدخول
   const mergeCart = async () => {
-    try {
-      const localCart = JSON.parse(localStorage.getItem('cart') || '[]');
-      
-      if (localCart.length === 0) return;
-
-      for (const item of localCart) {
-        const existingItem = cartItems.find(cartItem => cartItem.id === item.id);
-        
-        if (existingItem) {
-          const newQuantity = existingItem.quantity + item.quantity;
-          await updateQuantity(item.id, newQuantity);
-        } else {
-          await addToCart(item, item.quantity);
-        }
-      }
-
-      localStorage.removeItem('cart');
-      
-    } catch (error) {
-      console.error('Error merging cart:', error);
-    }
+    // تم الاستغناء عن localStorage
+    await fetchCart();
   };
 
   // القيم التي سيتم توفيرها
