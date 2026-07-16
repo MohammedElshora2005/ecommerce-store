@@ -2,9 +2,11 @@
 
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../../hooks/useAuth';
 import { EnvelopeIcon, ArrowLeftIcon } from '@heroicons/react/24/outline';
 
 const ForgotPasswordForm = () => {
+  const { resetPassword } = useAuth();
   const [email, setEmail] = useState('');
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -36,16 +38,18 @@ const ForgotPasswordForm = () => {
     setIsLoading(true);
 
     try {
-      // محاكاة إرسال طلب إعادة تعيين كلمة المرور
-      // هنا هنضيف الكود بتاع Supabase بعدين
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
-      // محاكاة نجاح العملية
-      setSuccessMessage('تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني');
-      setIsSubmitted(true);
-      setEmail('');
+      // ✅ استخدام Supabase لإرسال رابط إعادة تعيين كلمة المرور
+      const result = await resetPassword(email);
       
+      if (result.success) {
+        setSuccessMessage('تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني');
+        setIsSubmitted(true);
+        setEmail('');
+      } else {
+        setError(result.error || 'حدث خطأ أثناء إرسال الطلب');
+      }
     } catch (err) {
+      console.error('Reset password error:', err);
       setError('حدث خطأ أثناء إرسال الطلب. من فضلك حاول مرة أخرى');
     } finally {
       setIsLoading(false);
@@ -167,7 +171,7 @@ const ForgotPasswordForm = () => {
             to="/login"
             className="flex items-center text-blue-600 hover:text-blue-800 transition-colors"
           >
-            <ArrowLeftIcon className="h-4 w-4 mr-1" />
+            <ArrowLeftIcon className="h-4 w-4 ml-1" />
             العودة لتسجيل الدخول
           </Link>
           
