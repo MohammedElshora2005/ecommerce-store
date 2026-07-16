@@ -3,8 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { useCart } from '../../hooks/useCart';
-import { products } from '../../api/products';
+import { supabase } from '../../lib/supabase';
 import {
   ShoppingBagIcon,
   UsersIcon,
@@ -36,7 +35,9 @@ ChartJS.register(
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const { user, isAdmin, logout, allUsers } = useAuth();
-  const { orders } = useCart();
+  const [orders, setOrders] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const [stats, setStats] = useState({
     products: 0,
@@ -52,22 +53,70 @@ const AdminDashboard = () => {
     revenue: 0
   });
 
+  // ✅ جلب المنتجات من Supabase
+  const fetchProducts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*');
+      
+      if (error) throw error;
+      setProducts(data || []);
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      return [];
+    }
+  };
+
+  // ✅ جلب الطلبات من Supabase
+  const fetchOrders = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*');
+      
+      if (error) throw error;
+      setOrders(data || []);
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+      return [];
+    }
+  };
+
   useEffect(() => {
     if (!isAdmin) {
       navigate('/');
       return;
     }
-    
-    const totalRevenue = orders.reduce((sum, order) => sum + order.total, 0);
-    const newStats = {
-      products: products.length,
-      users: allUsers.length,
-      orders: orders.length,
-      revenue: totalRevenue
+
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const [productsData, ordersData] = await Promise.all([
+          fetchProducts(),
+          fetchOrders()
+        ]);
+
+        const totalRevenue = ordersData.reduce((sum, order) => sum + order.total, 0);
+        const newStats = {
+          products: productsData.length,
+          users: allUsers.length || 0,
+          orders: ordersData.length,
+          revenue: totalRevenue
+        };
+        setStats(newStats);
+        animateCounters(newStats);
+      } catch (error) {
+        console.error('Error loading dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
     };
-    setStats(newStats);
-    animateCounters(newStats);
-  }, [isAdmin, navigate, allUsers, orders]);
+
+    loadData();
+  }, [isAdmin, navigate, allUsers]);
 
   const animateCounters = (target) => {
     const duration = 1500;
@@ -92,12 +141,33 @@ const AdminDashboard = () => {
     }, stepTime);
   };
 
-  // ✅ بيانات الرسوم البيانية
+  // ✅ بيانات الرسوم البيانية (من الطلبات الحقيقية)
+  const getMonthlyData = () => {
+    const months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو'];
+    const monthlySales = new Array(6).fill(0);
+    const monthlyOrders = new Array(6).fill(0);
+
+    orders.forEach(order => {
+      if (order.date) {
+        const date = new Date(order.date);
+        const month = date.getMonth();
+        if (month >= 0 && month < 6) {
+          monthlySales[month] += order.total || 0;
+          monthlyOrders[month] += 1;
+        }
+      }
+    });
+
+    return { monthlySales, monthlyOrders };
+  };
+
+  const { monthlySales, monthlyOrders } = getMonthlyData();
+
   const salesChartData = {
     labels: ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو'],
     datasets: [{
       label: 'المبيعات',
-      data: [12000, 19000, 15000, 25000, 22000, 30000],
+      data: monthlySales,
       backgroundColor: 'rgba(37, 99, 235, 0.5)',
       borderColor: 'rgba(37, 99, 235, 1)',
       borderWidth: 2,
@@ -109,7 +179,7 @@ const AdminDashboard = () => {
     labels: ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو'],
     datasets: [{
       label: 'الطلبات',
-      data: [5, 8, 6, 12, 10, 15],
+      data: monthlyOrders,
       backgroundColor: 'rgba(139, 92, 246, 0.2)',
       borderColor: 'rgba(139, 92, 246, 1)',
       borderWidth: 3,
@@ -154,7 +224,7 @@ const AdminDashboard = () => {
     navigate('/');
   };
 
-  // ✅ أزرار التنقل السريع (ألوان متناسقة مع الموقع)
+  // ✅ أزرار التنقل السريع
   const quickLinks = [
     { title: 'المنتجات', icon: '🛍️', path: '/admin/products', color: 'from-blue-500 to-blue-700' },
     { title: 'الطلبات', icon: '📦', path: '/admin/orders', color: 'from-indigo-500 to-indigo-700' },
@@ -167,10 +237,18 @@ const AdminDashboard = () => {
     { title: 'المنتجات', value: animatedStats.products, icon: ShoppingBagIcon, color: 'bg-blue-500' },
     { title: 'المستخدمين', value: animatedStats.users, icon: UsersIcon, color: 'bg-teal-500' },
     { title: 'الطلبات', value: animatedStats.orders, icon: ShoppingCartIcon, color: 'bg-indigo-500' },
-    { title: 'المبيعات', value: `${animatedStats.revenue.toLocaleString()} ج.م`, icon: CurrencyDollarIcon, color: 'bg-amber-500' },
+    { title: 'المبيعات', value: `${formatPrice(animatedStats.revenue)}`, icon: CurrencyDollarIcon, color: 'bg-amber-500' },
   ];
 
   if (!isAdmin) return null;
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -196,7 +274,7 @@ const AdminDashboard = () => {
       </header>
 
       <div className="container mx-auto px-4 py-8">
-        {/* ✅ أزرار التنقل السريع (ألوان متناسقة) */}
+        {/* أزرار التنقل السريع */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
           {quickLinks.map((link) => (
             <Link
@@ -210,7 +288,7 @@ const AdminDashboard = () => {
           ))}
         </div>
 
-        {/* ✅ الإحصائيات */}
+        {/* الإحصائيات */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {statsData.map((stat, index) => (
             <div key={index} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow">
@@ -227,7 +305,7 @@ const AdminDashboard = () => {
           ))}
         </div>
 
-        {/* ✅ الرسوم البيانية */}
+        {/* الرسوم البيانية */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 lg:col-span-2">
             <h3 className="font-semibold text-gray-900 dark:text-white mb-4">📈 المبيعات الشهرية</h3>
@@ -243,11 +321,11 @@ const AdminDashboard = () => {
           </div>
         </div>
 
-        {/* ✅ اتجاه الطلبات */}
+        {/* اتجاه الطلبات */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
           <h3 className="font-semibold text-gray-900 dark:text-white mb-4">📉 اتجاه الطلبات</h3>
           <div className="h-48">
-            <Line data={ordersChartData} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 2 } } } }} />
+            <Line data={ordersChartData} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }} />
           </div>
         </div>
       </div>
