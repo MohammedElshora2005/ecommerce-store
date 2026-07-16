@@ -15,7 +15,7 @@ import CartPage from './pages/CartPage';
 import CheckoutPage from './pages/CheckoutPage';
 import ContactPage from './pages/ContactPage';
 import OffersPage from './pages/OffersPage';
-import OfferDetailsPage from './pages/OfferDetailsPage'; // ✅ استيراد صفحة تفاصيل العرض
+import OfferDetailsPage from './pages/OfferDetailsPage';
 
 // ✅ صفحات المستخدم
 import ProfilePage from './pages/ProfilePage';
@@ -54,6 +54,9 @@ const AppRoutes = () => (
     
     {/* لوحة تحكم الأدمن */}
     <Route path="/admin/dashboard" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+    
+    {/* ✅ مسار مختصر للوحة التحكم */}
+    <Route path="/dashboard" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
     
     {/* إدارة المنتجات */}
     <Route path="/admin/products" element={<ProtectedRoute><ProductsManagement /></ProtectedRoute>} />
