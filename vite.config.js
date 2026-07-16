@@ -1,4 +1,4 @@
-// ecommerce-store\vite.config.js
+// ecommerce-store/vite.config.js
 
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -45,6 +45,7 @@ export default defineConfig({
 
   optimizeDeps: {
     include: ['react', 'react-dom', 'react-router-dom', '@supabase/supabase-js'],
+    exclude: ['@supabase/realtime-js'], // ✅ منع مشكلة Realtime subscriptions
   },
 
   envPrefix: ['VITE_', 'REACT_APP_'],
