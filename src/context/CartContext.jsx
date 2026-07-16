@@ -42,6 +42,7 @@ export const CartProvider = ({ children }) => {
       const { data, error: fetchError } = await supabase
         .from('cart')
         .select(`
+          id,
           product_id,
           quantity,
           products (*)
@@ -56,11 +57,22 @@ export const CartProvider = ({ children }) => {
       console.log('📦 Cart data from Supabase:', data);
 
       if (data && data.length > 0) {
-        const items = data.map(item => ({
-          ...item.products,
-          quantity: item.quantity,
-          cartId: item.product_id
-        }));
+        const items = data.map(item => {
+          const product = item.products;
+          return {
+            id: product.id,
+            name: product.name,
+            price: product.price,
+            image: product.image,
+            description: product.description,
+            category: product.category,
+            brand: product.brand,
+            stock: product.stock,
+            rating: product.rating,
+            quantity: item.quantity,
+            cartId: item.id
+          };
+        });
         console.log('✅ Setting cart items:', items);
         setCartItems(items);
       } else {
@@ -109,7 +121,7 @@ export const CartProvider = ({ children }) => {
     }
   }, [user]);
 
-  // ✅ إضافة منتج للعربة (نسخة مبسطة للاختبار)
+  // ✅ إضافة منتج للعربة
   const addToCart = async (product, quantity = 1) => {
     if (!user) {
       return { success: false, error: 'يجب تسجيل الدخول أولاً' };
@@ -132,51 +144,55 @@ export const CartProvider = ({ children }) => {
         throw new Error('المخزون غير كافٍ');
       }
 
-      // ✅ إضافة مباشرة (بدون التحقق من الوجود)
-      const { error: insertError } = await supabase
+      // ✅ التحقق من وجود المنتج في العربة
+      const { data: existing, error: checkError } = await supabase
         .from('cart')
-        .insert({
-          user_id: user.id,
-          product_id: product.id,
-          quantity: quantity
-        });
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('product_id', product.id)
+        .single();
 
-      if (insertError) {
-        // ✅ لو المنتج موجود بالفعل، حدّث الكمية
-        if (insertError.code === '23505') { // unique violation
-          console.log('⚠️ Product already in cart, updating quantity...');
-          
-          // جلب العنصر الموجود
-          const { data: existing } = await supabase
-            .from('cart')
-            .select('*')
-            .eq('user_id', user.id)
-            .eq('product_id', product.id)
-            .single();
-
-          if (existing) {
-            const newQuantity = existing.quantity + quantity;
-            const { error: updateError } = await supabase
-              .from('cart')
-              .update({ quantity: newQuantity })
-              .eq('id', existing.id);
-
-            if (updateError) throw updateError;
-          }
-        } else {
-          throw insertError;
-        }
+      if (checkError && checkError.code !== 'PGRST116') {
+        // لو الجدول فاضي، يبقى عادي
       }
 
-      console.log('✅ Product added/updated successfully!');
+      if (existing) {
+        // ✅ تحديث الكمية
+        const newQuantity = existing.quantity + quantity;
+        if (product.stock < newQuantity) {
+          throw new Error('المخزون غير كافٍ');
+        }
 
-      // جلب العربة تاني
+        const { error: updateError } = await supabase
+          .from('cart')
+          .update({ quantity: newQuantity })
+          .eq('id', existing.id);
+
+        if (updateError) throw updateError;
+        
+        console.log('✅ Product quantity updated successfully!');
+      } else {
+        // ✅ إضافة منتج جديد
+        const { error: insertError } = await supabase
+          .from('cart')
+          .insert({
+            user_id: user.id,
+            product_id: product.id,
+            quantity: quantity
+          });
+
+        if (insertError) throw insertError;
+        
+        console.log('✅ New product added to cart successfully!');
+      }
+
+      // ✅ جلب العربة مرة أخرى
       await fetchCart();
       setIsCartOpen(true);
       return { success: true, message: 'تمت الإضافة للعربة' };
 
     } catch (error) {
-      console.error('Error adding to cart:', error);
+      console.error('❌ Error adding to cart:', error);
       setError(error.message);
       return { success: false, error: error.message };
     } finally {
