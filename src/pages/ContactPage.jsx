@@ -9,8 +9,8 @@ const ContactPage = () => {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState({ type: '', message: '' });
 
-  // ✅ استخدام الرابط الديناميكي (يعتمد على البيئة)
-  const API_URL = import.meta.env.VITE_API_URL || 'https://ecommerce-store.vercel.app';
+  // ✅ استخدام الرابط المباشر (بدون متغير بيئة)
+  const API_URL = 'https://ecommerce-store.vercel.app';
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -22,7 +22,6 @@ const ContactPage = () => {
     setStatus({ type: '', message: '' });
 
     try {
-      // ✅ استخدام الرابط الديناميكي بدل localhost
       await axios.post(`${API_URL}/api/send-email`, formData);
       setStatus({ type: 'success', message: '✅ تم إرسال رسالتك بنجاح! سنرد عليك قريباً.' });
       setFormData({ name: '', email: '', message: '' });
