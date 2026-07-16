@@ -151,12 +151,19 @@ const ProfilePage = () => {
         setIsEditing(false);
         // ✅ تحديث allUsers تاني عشان يجيب البيانات الجديدة
         await fetchAllUsers();
-        // ✅ تحديث userData محلياً
+        // ✅ تحديث userData محلياً بدل reload
         setUserData(prev => ({
           ...prev,
-          ...updateData
+          name: updateData.name,
+          phone: updateData.phone,
+          avatar: updateData.avatar
         }));
-        setTimeout(() => window.location.reload(), 500);
+        // ✅ تحديث formData
+        setFormData({
+          name: updateData.name,
+          phone: updateData.phone,
+          avatar: updateData.avatar
+        });
       } else {
         toast.error(`❌ ${result.error || 'فشل تحديث الملف'}`);
       }
