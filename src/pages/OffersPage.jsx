@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../hooks/useCart';
 import { useAuth } from '../hooks/useAuth';
+import { supabase } from '../lib/supabase';
 import {
   TagIcon,
   ShoppingBagIcon,
@@ -24,29 +25,37 @@ const OffersPage = () => {
   const [loading, setLoading] = useState(true);
   const [isAddingToCart, setIsAddingToCart] = useState({});
 
-  // تحميل العروض من localStorage
-  useEffect(() => {
-    const loadOffers = () => {
+  // ✅ جلب العروض من Supabase
+  const fetchOffers = async () => {
+    try {
       setLoading(true);
-      try {
-        const savedOffers = localStorage.getItem('offers');
-        if (savedOffers) {
-          const allOffers = JSON.parse(savedOffers);
-          // عرض العروض النشطة فقط
-          const activeOffers = allOffers.filter(offer => offer.active === true);
-          setOffers(activeOffers);
-        } else {
-          setOffers([]);
-        }
-      } catch (error) {
-        console.error('Error loading offers:', error);
-        setOffers([]);
-      } finally {
-        setLoading(false);
-      }
-    };
+      const { data, error } = await supabase
+        .from('offers')
+        .select('*')
+        .eq('active', true)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      
+      // تصفية العروض النشطة حسب التاريخ
+      const now = new Date();
+      const activeOffers = (data || []).filter(offer => {
+        const start = new Date(offer.start_date);
+        const end = new Date(offer.end_date);
+        return now >= start && now <= end;
+      });
+      
+      setOffers(activeOffers);
+    } catch (error) {
+      console.error('Error fetching offers:', error);
+      setOffers([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    loadOffers();
+  useEffect(() => {
+    fetchOffers();
   }, []);
 
   // تنسيق السعر
@@ -74,8 +83,8 @@ const OffersPage = () => {
   // الحصول على حالة العرض
   const getOfferStatus = (offer) => {
     const now = new Date();
-    const start = new Date(offer.startDate);
-    const end = new Date(offer.endDate);
+    const start = new Date(offer.start_date);
+    const end = new Date(offer.end_date);
 
     if (!offer.active) return { label: 'غير نشط', color: 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-400' };
     if (now < start) return { label: 'لم يبدأ', color: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' };
@@ -96,7 +105,7 @@ const OffersPage = () => {
       const product = {
         id: offer.id,
         name: offer.name,
-        price: offer.offerPrice,
+        price: offer.offer_price,
         image: offer.image || 'https://picsum.photos/seed/' + offer.id + '/300/300',
         stock: offer.stock || 999,
         category: offer.category || 'عروض',
@@ -166,9 +175,9 @@ const OffersPage = () => {
             {offers.map((offer) => {
               const status = getOfferStatus(offer);
               const isActive = status.label === 'نشط';
-              const discountPercent = offer.discountValue || 
-                (offer.originalPrice > 0 && offer.offerPrice > 0 
-                  ? Math.round(((offer.originalPrice - offer.offerPrice) / offer.originalPrice) * 100) 
+              const discountPercent = offer.discount_value || 
+                (offer.original_price > 0 && offer.offer_price > 0 
+                  ? Math.round(((offer.original_price - offer.offer_price) / offer.original_price) * 100) 
                   : 0);
 
               return (
@@ -239,11 +248,11 @@ const OffersPage = () => {
                     {/* السعر */}
                     <div className="flex items-baseline gap-3">
                       <span className="text-xl font-bold text-rose-600 dark:text-rose-400">
-                        {formatPrice(offer.offerPrice)}
+                        {formatPrice(offer.offer_price)}
                       </span>
-                      {offer.originalPrice > 0 && (
+                      {offer.original_price > 0 && (
                         <span className="text-sm text-gray-400 dark:text-gray-500 line-through">
-                          {formatPrice(offer.originalPrice)}
+                          {formatPrice(offer.original_price)}
                         </span>
                       )}
                     </div>
@@ -259,11 +268,11 @@ const OffersPage = () => {
                     <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
                       <ClockIcon className="h-3 w-3" />
                       <span>
-                        {formatDate(offer.startDate)} - {formatDate(offer.endDate)}
+                        {formatDate(offer.start_date)} - {formatDate(offer.end_date)}
                       </span>
                     </div>
 
-                    {/* ✅ أزرار الإجراءات - رابط التفاصيل الصحيح */}
+                    {/* أزرار الإجراءات */}
                     <div className="flex gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
                       <Link
                         to={`/offer/${offer.id}`}
