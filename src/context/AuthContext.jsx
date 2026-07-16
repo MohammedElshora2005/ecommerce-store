@@ -1,6 +1,7 @@
 // ecommerce-store/src/context/AuthContext.jsx
 
 import React, { createContext, useState, useContext, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
 
 // إنشاء Context
 const AuthContext = createContext();
@@ -21,30 +22,71 @@ export const AuthProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const [userRole, setUserRole] = useState('user');
 
-  // ✅ قائمة المستخدمين (فاضية في البداية)
-  const [allUsers, setAllUsers] = useState(() => {
-    const saved = localStorage.getItem('allUsers');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  // حفظ المستخدمين في localStorage
-  useEffect(() => {
-    localStorage.setItem('allUsers', JSON.stringify(allUsers));
-  }, [allUsers]);
+  // ✅ قائمة المستخدمين (من Supabase)
+  const [allUsers, setAllUsers] = useState([]);
 
   // ✅ قراءة بيانات الأدمن من .env
   const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || 'admin1@gmail.com';
   const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'Admin@123';
 
-  // التحقق من حالة المستخدم عند تحميل الصفحة
+  // ✅ جلب المستخدمين من Supabase
+  const fetchAllUsers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*');
+      
+      if (error) throw error;
+      setAllUsers(data || []);
+      return data;
+    } catch (err) {
+      console.error('Error fetching users:', err);
+      return [];
+    }
+  };
+
+  // ✅ التحقق من حالة المستخدم عند تحميل الصفحة
   useEffect(() => {
-    const checkUser = () => {
+    const checkUser = async () => {
       try {
-        const storedUser = localStorage.getItem('user');
-        if (storedUser) {
-          const parsedUser = JSON.parse(storedUser);
-          setUser(parsedUser);
-          setUserRole(parsedUser.role || 'user');
+        setLoading(true);
+        
+        // جلب session من Supabase
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) throw sessionError;
+        
+        if (session?.user) {
+          // جلب بيانات المستخدم من جدول users
+          const { data: userData, error: userError } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+          
+          if (userError && userError.code !== 'PGRST116') {
+            console.error('Error fetching user data:', userError);
+          }
+          
+          const mergedUser = {
+            ...session.user,
+            ...userData,
+            id: session.user.id,
+            role: userData?.role || 'user',
+            loyaltyPoints: userData?.loyalty_points || 0,
+            loyaltyLevel: userData?.loyalty_level || 'برونزي'
+          };
+          
+          setUser(mergedUser);
+          setUserRole(mergedUser.role || 'user');
+        } else {
+          // جلب من localStorage كـ fallback
+          const storedUser = localStorage.getItem('user');
+          if (storedUser) {
+            const parsedUser = JSON.parse(storedUser);
+            setUser(parsedUser);
+            setUserRole(parsedUser.role || 'user');
+          }
         }
       } catch (error) {
         console.error('Error checking user:', error);
@@ -54,140 +96,136 @@ export const AuthProvider = ({ children }) => {
     };
 
     checkUser();
+    
+    // ✅ الاستماع لتغيرات الـ Auth (تسجيل دخول/خروج)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_IN' && session?.user) {
+          // جلب بيانات المستخدم من جدول users
+          const { data: userData } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+          
+          const mergedUser = {
+            ...session.user,
+            ...userData,
+            id: session.user.id,
+            role: userData?.role || 'user',
+            loyaltyPoints: userData?.loyalty_points || 0,
+            loyaltyLevel: userData?.loyalty_level || 'برونزي'
+          };
+          
+          setUser(mergedUser);
+          setUserRole(mergedUser.role || 'user');
+          localStorage.setItem('user', JSON.stringify(mergedUser));
+        } else if (event === 'SIGNED_OUT') {
+          setUser(null);
+          setUserRole('user');
+          localStorage.removeItem('user');
+        }
+      }
+    );
+
+    // جلب المستخدمين
+    fetchAllUsers();
+
+    return () => {
+      subscription?.unsubscribe();
+    };
   }, []);
 
-  // جلب دور المستخدم
-  const fetchUserRole = async (userId) => {
-    try {
-      const user = allUsers.find(u => u.id === userId);
-      return user?.role || 'user';
-    } catch (error) {
-      console.error('Error fetching user role:', error);
-      return 'user';
-    }
-  };
-
-  // ✅ تسجيل الدخول (المستخدم لازم يكون موجود)
+  // ✅ تسجيل الدخول
   const login = async (email, password) => {
     try {
       setLoading(true);
       setError(null);
       
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      // ✅ حساب الأدمن من .env
-      if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
-        const adminUser = {
-          id: '1',
-          email: ADMIN_EMAIL,
-          name: 'أدمن الموقع',
-          phone: '',
-          avatar: 'https://ui-avatars.com/api/?name=Admin&background=2563eb&color=fff',
-          user_metadata: {
-            name: 'أدمن الموقع'
-          },
-          role: 'admin',
-          loyaltyPoints: 0,
-          loyaltyLevel: 'برونزي'
-        };
-        
-        localStorage.setItem('user', JSON.stringify(adminUser));
-        setUser(adminUser);
-        setUserRole('admin');
-        return { success: true, user: adminUser };
-      }
-
-      // ✅ التحقق من وجود المستخدم في القائمة
-      const existingUser = allUsers.find(u => u.email === email);
+      // ✅ تسجيل الدخول باستخدام Supabase Auth
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
       
-      // ❌ لو المستخدم مش موجود، ارفض الدخول
-      if (!existingUser) {
-        return { success: false, error: 'البريد الإلكتروني غير مسجل. يرجى إنشاء حساب أولاً' };
-      }
-
-      // ✅ التحقق من كلمة المرور (محاكاة)
-      if (password && password.length >= 6) {
-        const mockUser = {
-          id: existingUser.id,
-          email: existingUser.email,
-          name: existingUser.name,
-          phone: existingUser.phone || '',
-          avatar: existingUser.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(existingUser.name)}&background=2563eb&color=fff`,
-          user_metadata: {
-            name: existingUser.name
-          },
-          role: existingUser.role || 'user',
-          loyaltyPoints: existingUser.loyaltyPoints || 0,
-          loyaltyLevel: existingUser.loyaltyLevel || 'برونزي'
-        };
+      if (error) {
+        // ✅ محاولة تسجيل الدخول كأدمن من .env
+        if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+          const adminUser = {
+            id: 'admin-' + Date.now(),
+            email: ADMIN_EMAIL,
+            name: 'أدمن الموقع',
+            phone: '',
+            avatar: 'https://ui-avatars.com/api/?name=Admin&background=2563eb&color=fff',
+            user_metadata: { name: 'أدمن الموقع' },
+            role: 'admin',
+            loyaltyPoints: 0,
+            loyaltyLevel: 'برونزي'
+          };
+          
+          localStorage.setItem('user', JSON.stringify(adminUser));
+          setUser(adminUser);
+          setUserRole('admin');
+          return { success: true, user: adminUser };
+        }
         
-        localStorage.setItem('user', JSON.stringify(mockUser));
-        setUser(mockUser);
-        setUserRole(mockUser.role || 'user');
-        return { success: true, user: mockUser };
+        return { success: false, error: error.message };
       }
-
-      return { success: false, error: 'كلمة المرور غير صحيحة' };
-    } catch (error) {
-      console.error('Login error:', error);
-      setError(error.message);
-      return { success: false, error: error.message };
+      
+      if (!data.user) {
+        return { success: false, error: 'فشل تسجيل الدخول' };
+      }
+      
+      // جلب بيانات المستخدم من جدول users
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', data.user.id)
+        .single();
+      
+      const mergedUser = {
+        ...data.user,
+        ...userData,
+        id: data.user.id,
+        role: userData?.role || 'user',
+        loyaltyPoints: userData?.loyalty_points || 0,
+        loyaltyLevel: userData?.loyalty_level || 'برونزي'
+      };
+      
+      localStorage.setItem('user', JSON.stringify(mergedUser));
+      setUser(mergedUser);
+      setUserRole(mergedUser.role || 'user');
+      
+      return { success: true, user: mergedUser };
+    } catch (err) {
+      console.error('Login error:', err);
+      setError(err.message);
+      return { success: false, error: err.message };
     } finally {
       setLoading(false);
     }
   };
 
-  // تسجيل الدخول بجوجل (محاكاة)
+  // ✅ تسجيل الدخول بجوجل
   const loginWithGoogle = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      const googleUser = {
-        id: Date.now().toString(),
-        email: 'user@gmail.com',
-        name: 'مستخدم جوجل',
-        phone: '',
-        avatar: 'https://ui-avatars.com/api/?name=Google+User&background=ea4335&color=fff',
-        user_metadata: {
-          name: 'مستخدم جوجل'
-        },
-        role: 'user',
-        loyaltyPoints: 0,
-        loyaltyLevel: 'برونزي'
-      };
-
-      // ✅ إضافة المستخدم لقائمة المستخدمين
-      const existingUser = allUsers.find(u => u.email === googleUser.email);
-      if (!existingUser) {
-        const newUser = {
-          id: googleUser.id,
-          name: googleUser.user_metadata.name,
-          email: googleUser.email,
-          phone: '',
-          role: 'user',
-          status: 'active',
-          createdAt: new Date().toISOString().split('T')[0],
-          orders: 0,
-          totalSpent: 0,
-          avatar: googleUser.avatar,
-          loyaltyPoints: 0,
-          loyaltyLevel: 'برونزي'
-        };
-        setAllUsers(prev => [...prev, newUser]);
-      }
-
-      localStorage.setItem('user', JSON.stringify(googleUser));
-      setUser(googleUser);
-      setUserRole('user');
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin
+        }
+      });
       
-      return { success: true, user: googleUser };
-    } catch (error) {
-      console.error('Google login error:', error);
-      setError(error.message);
-      return { success: false, error: error.message };
+      if (error) throw error;
+      
+      return { success: true, data };
+    } catch (err) {
+      console.error('Google login error:', err);
+      setError(err.message);
+      return { success: false, error: err.message };
     } finally {
       setLoading(false);
     }
@@ -199,69 +237,83 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       setError(null);
       
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      if (email && password && name && password.length >= 6) {
-        if (email === ADMIN_EMAIL) {
-          return { success: false, error: 'هذا البريد الإلكتروني محجوز' };
+      // ✅ منع تسجيل الأدمن
+      if (email === ADMIN_EMAIL) {
+        return { success: false, error: 'هذا البريد الإلكتروني محجوز' };
+      }
+      
+      // ✅ التسجيل باستخدام Supabase Auth
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { name }
         }
-
-        // ✅ التحقق من عدم وجود المستخدم
-        if (allUsers.some(u => u.email === email)) {
-          return { success: false, error: 'البريد الإلكتروني مستخدم بالفعل' };
-        }
-
-        const newUser = {
-          id: Date.now().toString(),
+      });
+      
+      if (error) {
+        return { success: false, error: error.message };
+      }
+      
+      if (!data.user) {
+        return { success: false, error: 'فشل إنشاء الحساب' };
+      }
+      
+      // ✅ إضافة المستخدم لجدول users
+      const { error: insertError } = await supabase
+        .from('users')
+        .insert({
+          id: data.user.id,
           name: name,
           email: email,
-          phone: '',
           role: 'user',
           status: 'active',
-          createdAt: new Date().toISOString().split('T')[0],
-          orders: 0,
-          totalSpent: 0,
           avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=2563eb&color=fff`,
-          loyaltyPoints: 0,
-          loyaltyLevel: 'برونزي'
-        };
-
-        setAllUsers(prev => [...prev, newUser]);
-
-        const mockUser = {
-          id: newUser.id,
-          email: newUser.email,
-          name: newUser.name,
-          phone: '',
-          avatar: newUser.avatar,
-          user_metadata: {
-            name: newUser.name
-          },
-          role: 'user',
-          loyaltyPoints: 0,
-          loyaltyLevel: 'برونزي'
-        };
-
-        localStorage.setItem('user', JSON.stringify(mockUser));
-        setUser(mockUser);
-        setUserRole('user');
-        return { success: true, user: mockUser };
+          loyalty_points: 0,
+          loyalty_level: 'برونزي'
+        });
+      
+      if (insertError) {
+        console.error('Error inserting user:', insertError);
       }
-
-      return { success: false, error: 'بيانات غير صحيحة' };
-    } catch (error) {
-      console.error('Register error:', error);
-      setError(error.message);
-      return { success: false, error: error.message };
+      
+      // ✅ جلب بيانات المستخدم بعد التسجيل
+      const { data: userData } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', data.user.id)
+        .single();
+      
+      const mergedUser = {
+        ...data.user,
+        ...userData,
+        id: data.user.id,
+        role: userData?.role || 'user',
+        loyaltyPoints: userData?.loyalty_points || 0,
+        loyaltyLevel: userData?.loyalty_level || 'برونزي'
+      };
+      
+      localStorage.setItem('user', JSON.stringify(mergedUser));
+      setUser(mergedUser);
+      setUserRole('user');
+      
+      return { success: true, user: mergedUser };
+    } catch (err) {
+      console.error('Register error:', err);
+      setError(err.message);
+      return { success: false, error: err.message };
     } finally {
       setLoading(false);
     }
   };
 
-  // تسجيل الخروج
+  // ✅ تسجيل الخروج
   const logout = async () => {
     try {
       setLoading(true);
+      
+      // تسجيل الخروج من Supabase
+      await supabase.auth.signOut();
       
       localStorage.removeItem('user');
       setUser(null);
@@ -269,95 +321,104 @@ export const AuthProvider = ({ children }) => {
       setError(null);
       
       return { success: true };
-    } catch (error) {
-      console.error('Logout error:', error);
-      setError(error.message);
-      return { success: false, error: error.message };
+    } catch (err) {
+      console.error('Logout error:', err);
+      setError(err.message);
+      return { success: false, error: err.message };
     } finally {
       setLoading(false);
     }
   };
 
-  // إعادة تعيين كلمة المرور (محاكاة)
+  // ✅ إعادة تعيين كلمة المرور
   const resetPassword = async (email) => {
     try {
       setLoading(true);
       setError(null);
       
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      console.log(`📧 Password reset email sent to: ${email}`);
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`
+      });
+      
+      if (error) throw error;
       
       return { success: true };
-    } catch (error) {
-      console.error('Reset password error:', error);
-      setError(error.message);
-      return { success: false, error: error.message };
+    } catch (err) {
+      console.error('Reset password error:', err);
+      setError(err.message);
+      return { success: false, error: err.message };
     } finally {
       setLoading(false);
     }
   };
 
-  // تحديث كلمة المرور (محاكاة)
+  // ✅ تحديث كلمة المرور
   const updatePassword = async (newPassword) => {
     try {
       setLoading(true);
       setError(null);
       
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      console.log(`🔑 Password updated successfully`);
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
+      });
+      
+      if (error) throw error;
       
       return { success: true };
-    } catch (error) {
-      console.error('Update password error:', error);
-      setError(error.message);
-      return { success: false, error: error.message };
+    } catch (err) {
+      console.error('Update password error:', err);
+      setError(err.message);
+      return { success: false, error: err.message };
     } finally {
       setLoading(false);
     }
   };
 
-  // ✅ تحديث بيانات المستخدم (مع حفظ phone و avatar)
+  // ✅ تحديث بيانات المستخدم
   const updateProfile = async (data) => {
     try {
       setLoading(true);
       setError(null);
       
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
       if (user) {
-        // ✅ تحديث في allUsers
-        setAllUsers(prev => prev.map(u => 
-          u.id === user.id ? { 
-            ...u, 
-            name: data.name || u.name,
-            phone: data.phone || u.phone,
-            avatar: data.avatar || u.avatar
-          } : u
-        ));
-
-        // ✅ تحديث المستخدم الحالي
+        // تحديث في Supabase
+        const { error: updateError } = await supabase
+          .from('users')
+          .update({
+            name: data.name || user.name,
+            phone: data.phone || user.phone || '',
+            avatar: data.avatar || user.avatar || ''
+          })
+          .eq('id', user.id);
+        
+        if (updateError) throw updateError;
+        
+        // تحديث في localStorage
         const updatedUser = {
           ...user,
           name: data.name || user.name,
-          phone: data.phone || user.phone,
-          avatar: data.avatar || user.avatar,
-          user_metadata: { 
-            ...user.user_metadata, 
-            name: data.name || user.user_metadata?.name 
+          phone: data.phone || user.phone || '',
+          avatar: data.avatar || user.avatar || '',
+          user_metadata: {
+            ...user.user_metadata,
+            name: data.name || user.user_metadata?.name
           }
         };
         
         localStorage.setItem('user', JSON.stringify(updatedUser));
         setUser(updatedUser);
+        
+        // تحديث allUsers
+        setAllUsers(prev => prev.map(u => 
+          u.id === user.id ? { ...u, name: data.name || u.name, phone: data.phone || u.phone, avatar: data.avatar || u.avatar } : u
+        ));
       }
       
       return { success: true };
-    } catch (error) {
-      console.error('Update profile error:', error);
-      setError(error.message);
-      return { success: false, error: error.message };
+    } catch (err) {
+      console.error('Update profile error:', err);
+      setError(err.message);
+      return { success: false, error: err.message };
     } finally {
       setLoading(false);
     }
@@ -369,12 +430,17 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       setError(null);
       
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
+      const { error } = await supabase
+        .from('users')
+        .update({ role: newRole })
+        .eq('id', userId);
+      
+      if (error) throw error;
+      
       setAllUsers(prev => prev.map(u => 
         u.id === userId ? { ...u, role: newRole } : u
       ));
-
+      
       if (user && user.id === userId) {
         const updatedUser = { ...user, role: newRole };
         localStorage.setItem('user', JSON.stringify(updatedUser));
@@ -383,81 +449,110 @@ export const AuthProvider = ({ children }) => {
       }
       
       return { success: true };
-    } catch (error) {
-      console.error('Update role error:', error);
-      setError(error.message);
-      return { success: false, error: error.message };
+    } catch (err) {
+      console.error('Update role error:', err);
+      setError(err.message);
+      return { success: false, error: err.message };
     } finally {
       setLoading(false);
     }
   };
 
   // ✅ تحديث حالة المستخدم
-  const updateUserStatus = (userId, newStatus) => {
-    setAllUsers(prev => prev.map(u => 
-      u.id === userId ? { ...u, status: newStatus } : u
-    ));
+  const updateUserStatus = async (userId, newStatus) => {
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ status: newStatus })
+        .eq('id', userId);
+      
+      if (error) throw error;
+      
+      setAllUsers(prev => prev.map(u => 
+        u.id === userId ? { ...u, status: newStatus } : u
+      ));
+    } catch (err) {
+      console.error('Update status error:', err);
+    }
   };
 
   // ✅ حذف مستخدم
-  const deleteUser = (userId) => {
-    setAllUsers(prev => prev.filter(u => u.id !== userId));
+  const deleteUser = async (userId) => {
+    try {
+      const { error } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', userId);
+      
+      if (error) throw error;
+      
+      setAllUsers(prev => prev.filter(u => u.id !== userId));
+    } catch (err) {
+      console.error('Delete user error:', err);
+    }
   };
 
-  // ✅✅✅ تحديث إحصائيات المستخدم (مع تحديث localStorage و user) ✅✅✅
-  const updateUserStats = (userId, orderTotal) => {
-    console.log('🔄 Updating user stats for:', userId, 'Order total:', orderTotal);
-    
-    // جلب البيانات الحالية
-    let allUsers = JSON.parse(localStorage.getItem('allUsers') || '[]');
-    let currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-    
-    // تحديث allUsers
-    const updatedUsers = allUsers.map(u => {
-      if (u.id === userId) {
-        // حساب نقاط الولاء (10 نقاط لكل 100 جنيه)
-        const pointsEarned = Math.floor(orderTotal / 100) * 10;
-        const newTotalPoints = (u.loyaltyPoints || 0) + pointsEarned;
-        
-        // تحديد مستوى الولاء
-        let loyaltyLevel = 'برونزي';
-        if (newTotalPoints >= 500) loyaltyLevel = 'ذهبي';
-        else if (newTotalPoints >= 200) loyaltyLevel = 'فضي';
-        
-        const updatedUser = {
-          ...u,
+  // ✅ تحديث إحصائيات المستخدم
+  const updateUserStats = async (userId, orderTotal) => {
+    try {
+      // جلب بيانات المستخدم الحالية
+      const { data: userData, error: fetchError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      
+      if (fetchError) throw fetchError;
+      
+      // حساب نقاط الولاء
+      const pointsEarned = Math.floor(orderTotal / 100) * 10;
+      const newTotalPoints = (userData?.loyalty_points || 0) + pointsEarned;
+      
+      // تحديد مستوى الولاء
+      let loyaltyLevel = 'برونزي';
+      if (newTotalPoints >= 500) loyaltyLevel = 'ذهبي';
+      else if (newTotalPoints >= 200) loyaltyLevel = 'فضي';
+      
+      // تحديث في Supabase
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({
+          orders: (userData?.orders || 0) + 1,
+          total_spent: (userData?.total_spent || 0) + orderTotal,
+          loyalty_points: newTotalPoints,
+          loyalty_level: loyaltyLevel
+        })
+        .eq('id', userId);
+      
+      if (updateError) throw updateError;
+      
+      // تحديث allUsers
+      setAllUsers(prev => prev.map(u => 
+        u.id === userId ? { 
+          ...u, 
           orders: (u.orders || 0) + 1,
-          totalSpent: (u.totalSpent || 0) + orderTotal,
+          total_spent: (u.total_spent || 0) + orderTotal,
+          loyalty_points: newTotalPoints,
+          loyalty_level: loyaltyLevel
+        } : u
+      ));
+      
+      // تحديث المستخدم الحالي
+      if (user && user.id === userId) {
+        const updatedUser = {
+          ...user,
+          orders: (user.orders || 0) + 1,
+          totalSpent: (user.totalSpent || 0) + orderTotal,
           loyaltyPoints: newTotalPoints,
           loyaltyLevel: loyaltyLevel
         };
-        
-        console.log('✅ Updated user:', updatedUser);
-        return updatedUser;
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        setUser(updatedUser);
       }
-      return u;
-    });
-    
-    // حفظ allUsers
-    localStorage.setItem('allUsers', JSON.stringify(updatedUsers));
-    
-    // ✅ تحديث المستخدم الحالي في localStorage و state
-    const updatedCurrentUser = updatedUsers.find(u => u.id === userId);
-    if (updatedCurrentUser && currentUser.id === userId) {
-      const newCurrentUser = {
-        ...currentUser,
-        orders: updatedCurrentUser.orders,
-        totalSpent: updatedCurrentUser.totalSpent,
-        loyaltyPoints: updatedCurrentUser.loyaltyPoints,
-        loyaltyLevel: updatedCurrentUser.loyaltyLevel
-      };
-      localStorage.setItem('user', JSON.stringify(newCurrentUser));
-      setUser(newCurrentUser);
-      console.log('✅ Current user updated:', newCurrentUser);
+      
+    } catch (err) {
+      console.error('Update user stats error:', err);
     }
-    
-    // تحديث state
-    setAllUsers(updatedUsers);
   };
 
   // ✅ دالة الحصول على مستوى الولاء
@@ -472,14 +567,21 @@ export const AuthProvider = ({ children }) => {
     return allUsers;
   };
 
-  // التحقق من صلاحية الإداري
-  const isAdmin = () => {
-    return userRole === 'admin';
-  };
-
-  // التحقق من دور معين
-  const hasRole = (role) => {
-    return userRole === role;
+  // ✅ جلب دور المستخدم
+  const fetchUserRole = async (userId) => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', userId)
+        .single();
+      
+      if (error) throw error;
+      return data?.role || 'user';
+    } catch (err) {
+      console.error('Error fetching user role:', err);
+      return 'user';
+    }
   };
 
   // القيم التي سيتم توفيرها
@@ -490,8 +592,8 @@ export const AuthProvider = ({ children }) => {
     userRole,
     allUsers,
     isAuthenticated: !!user,
-    isAdmin: isAdmin(),
-    hasRole,
+    isAdmin: userRole === 'admin',
+    hasRole: (role) => userRole === role,
     login,
     loginWithGoogle,
     register,
@@ -505,8 +607,8 @@ export const AuthProvider = ({ children }) => {
     updateUserStats,
     getUsers,
     getLoyaltyLevel,
-    checkUser: () => {},
-    fetchUserRole
+    fetchUserRole,
+    fetchAllUsers
   };
 
   return (
