@@ -188,9 +188,9 @@ export const AuthProvider = ({ children }) => {
           console.error('Supabase admin login error:', supabaseError);
         }
         
-        // ✅ Fallback: استخدم ID ثابت عشان الأدمن يشتغل في العربة
+        // ✅ استخدام الإيميل كـ ID عشان يشتغل في العربة
         const adminUser = {
-          id: ADMIN_EMAIL, // ✅ استخدم الإيميل كـ ID بدل admin-xxx
+          id: ADMIN_EMAIL, // ✅ admin1@gmail.com
           email: ADMIN_EMAIL,
           name: 'أدمن الموقع',
           phone: '',
@@ -423,7 +423,7 @@ export const AuthProvider = ({ children }) => {
       }
       
       // ✅ لو الأدمن، تحديث localStorage بس
-      if (user.id === ADMIN_EMAIL || user.id?.startsWith('admin-')) {
+      if (user.id === ADMIN_EMAIL) {
         const updatedUser = {
           ...user,
           name: data.name || user.name,
@@ -560,7 +560,7 @@ export const AuthProvider = ({ children }) => {
   const updateUserStats = async (userId, orderTotal) => {
     try {
       // ✅ لو الأدمن، اتخطى
-      if (userId === ADMIN_EMAIL || userId?.startsWith('admin-')) {
+      if (userId === ADMIN_EMAIL) {
         console.log('Admin user, skipping stats update');
         return;
       }
