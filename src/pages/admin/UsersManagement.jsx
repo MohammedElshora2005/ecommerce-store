@@ -28,7 +28,7 @@ import { toast } from 'react-toastify';
 
 const UsersManagement = () => {
   const navigate = useNavigate();
-  const { isAdmin, allUsers, updateUserRole, updateUserStatus, deleteUser, fetchAllUsers } = useAuth();
+  const { isAdmin, fetchAllUsers } = useAuth();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -40,21 +40,27 @@ const UsersManagement = () => {
   const [editingUser, setEditingUser] = useState(null);
   const [editFormData, setEditFormData] = useState({ name: '', email: '', role: '' });
 
-  // تحميل البيانات من AuthContext
+  // ✅ تحميل البيانات من Supabase
   useEffect(() => {
     if (!isAdmin) {
       navigate('/');
       return;
     }
 
-    setLoading(true);
     const loadUsers = async () => {
-      await fetchAllUsers();
-      setUsers(allUsers || []);
-      setLoading(false);
+      setLoading(true);
+      try {
+        const data = await fetchAllUsers();
+        setUsers(data || []);
+      } catch (error) {
+        console.error('Error loading users:', error);
+        toast.error('❌ حدث خطأ أثناء تحميل المستخدمين');
+      } finally {
+        setLoading(false);
+      }
     };
     loadUsers();
-  }, [isAdmin, navigate, allUsers]);
+  }, [isAdmin, navigate]);
 
   // تنسيق السعر
   const formatPrice = (price) => {
@@ -113,40 +119,62 @@ const UsersManagement = () => {
     return matchesSearch && matchesRole && matchesStatus;
   });
 
-  // تحديث دور المستخدم
+  // ✅ تحديث دور المستخدم
   const handleUpdateRole = async (userId, newRole) => {
     try {
-      await updateUserRole(userId, newRole);
-      await fetchAllUsers();
-      setUsers(allUsers || []);
+      const { error } = await supabase
+        .from('users')
+        .update({ role: newRole })
+        .eq('id', userId);
+      
+      if (error) throw error;
+      
+      // تحديث القائمة
+      const data = await fetchAllUsers();
+      setUsers(data || []);
       setEditingUser(null);
       toast.success('✅ تم تحديث دور المستخدم بنجاح');
     } catch (error) {
+      console.error('Error updating role:', error);
       toast.error('❌ حدث خطأ أثناء تحديث الدور');
     }
   };
 
-  // تحديث حالة المستخدم
+  // ✅ تحديث حالة المستخدم
   const handleUpdateStatus = async (userId, newStatus) => {
     try {
-      await updateUserStatus(userId, newStatus);
-      await fetchAllUsers();
-      setUsers(allUsers || []);
+      const { error } = await supabase
+        .from('users')
+        .update({ status: newStatus })
+        .eq('id', userId);
+      
+      if (error) throw error;
+      
+      const data = await fetchAllUsers();
+      setUsers(data || []);
       toast.success('✅ تم تحديث حالة المستخدم بنجاح');
     } catch (error) {
+      console.error('Error updating status:', error);
       toast.error('❌ حدث خطأ أثناء تحديث الحالة');
     }
   };
 
-  // حذف مستخدم
+  // ✅ حذف مستخدم
   const handleDeleteUser = async (userId) => {
     try {
-      await deleteUser(userId);
-      await fetchAllUsers();
-      setUsers(allUsers || []);
+      const { error } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', userId);
+      
+      if (error) throw error;
+      
+      const data = await fetchAllUsers();
+      setUsers(data || []);
       setShowDeleteConfirm(null);
       toast.success('✅ تم حذف المستخدم بنجاح');
     } catch (error) {
+      console.error('Error deleting user:', error);
       toast.error('❌ حدث خطأ أثناء حذف المستخدم');
     }
   };
