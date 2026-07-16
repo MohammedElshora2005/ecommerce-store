@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { supabase } from '../../lib/supabase';
 import {
   UsersIcon,
   UserIcon,
@@ -23,10 +24,11 @@ import {
   CalendarIcon,
   DocumentArrowDownIcon
 } from '@heroicons/react/24/outline';
+import { toast } from 'react-toastify';
 
 const UsersManagement = () => {
   const navigate = useNavigate();
-  const { isAdmin, allUsers, updateUserRole, updateUserStatus, deleteUser } = useAuth(); // ✅ isAdmin قيمة boolean مش دالة
+  const { isAdmin, allUsers, updateUserRole, updateUserStatus, deleteUser, fetchAllUsers } = useAuth();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -40,15 +42,18 @@ const UsersManagement = () => {
 
   // تحميل البيانات من AuthContext
   useEffect(() => {
-    // ✅ isAdmin قيمة boolean مش دالة
     if (!isAdmin) {
       navigate('/');
       return;
     }
 
     setLoading(true);
-    setUsers(allUsers || []);
-    setLoading(false);
+    const loadUsers = async () => {
+      await fetchAllUsers();
+      setUsers(allUsers || []);
+      setLoading(false);
+    };
+    loadUsers();
   }, [isAdmin, navigate, allUsers]);
 
   // تنسيق السعر
@@ -109,23 +114,41 @@ const UsersManagement = () => {
   });
 
   // تحديث دور المستخدم
-  const handleUpdateRole = (userId, newRole) => {
-    updateUserRole(userId, newRole);
-    setUsers(allUsers);
-    setEditingUser(null);
+  const handleUpdateRole = async (userId, newRole) => {
+    try {
+      await updateUserRole(userId, newRole);
+      await fetchAllUsers();
+      setUsers(allUsers || []);
+      setEditingUser(null);
+      toast.success('✅ تم تحديث دور المستخدم بنجاح');
+    } catch (error) {
+      toast.error('❌ حدث خطأ أثناء تحديث الدور');
+    }
   };
 
   // تحديث حالة المستخدم
-  const handleUpdateStatus = (userId, newStatus) => {
-    updateUserStatus(userId, newStatus);
-    setUsers(allUsers);
+  const handleUpdateStatus = async (userId, newStatus) => {
+    try {
+      await updateUserStatus(userId, newStatus);
+      await fetchAllUsers();
+      setUsers(allUsers || []);
+      toast.success('✅ تم تحديث حالة المستخدم بنجاح');
+    } catch (error) {
+      toast.error('❌ حدث خطأ أثناء تحديث الحالة');
+    }
   };
 
   // حذف مستخدم
-  const handleDeleteUser = (userId) => {
-    deleteUser(userId);
-    setUsers(allUsers);
-    setShowDeleteConfirm(null);
+  const handleDeleteUser = async (userId) => {
+    try {
+      await deleteUser(userId);
+      await fetchAllUsers();
+      setUsers(allUsers || []);
+      setShowDeleteConfirm(null);
+      toast.success('✅ تم حذف المستخدم بنجاح');
+    } catch (error) {
+      toast.error('❌ حدث خطأ أثناء حذف المستخدم');
+    }
   };
 
   // إحصائيات
@@ -137,7 +160,6 @@ const UsersManagement = () => {
     admins: users.filter(u => u.role === 'admin').length
   };
 
-  // ✅ isAdmin قيمة boolean مش دالة
   if (!isAdmin) return null;
 
   return (
