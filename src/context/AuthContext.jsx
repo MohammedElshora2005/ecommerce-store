@@ -103,6 +103,7 @@ export const AuthProvider = ({ children }) => {
 
     checkUser();
     
+    // ✅ الاستماع لتغيرات الـ Auth مع معالجة الأخطاء
     try {
       const { data: { subscription } } = supabase.auth.onAuthStateChange(
         async (event, session) => {
