@@ -9,7 +9,7 @@ const ContactPage = () => {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState({ type: '', message: '' });
 
-  // ✅ استخدام الرابط المباشر (بدون متغير بيئة)
+  // ✅ الرابط المباشر للـ API
   const API_URL = 'https://ecommerce-store.vercel.app';
 
   const handleChange = (e) => {
@@ -22,11 +22,17 @@ const ContactPage = () => {
     setStatus({ type: '', message: '' });
 
     try {
-      await axios.post(`${API_URL}/api/send-email`, formData);
+      console.log('📤 Sending email to:', `${API_URL}/api/send-email`);
+      console.log('📦 Data:', formData);
+      
+      const response = await axios.post(`${API_URL}/api/send-email`, formData);
+      console.log('✅ Response:', response.data);
+      
       setStatus({ type: 'success', message: '✅ تم إرسال رسالتك بنجاح! سنرد عليك قريباً.' });
       setFormData({ name: '', email: '', message: '' });
     } catch (error) {
-      console.error('Error sending email:', error);
+      console.error('❌ Error:', error);
+      console.error('❌ Response:', error.response);
       setStatus({ type: 'error', message: '❌ حدث خطأ أثناء الإرسال. حاول مرة أخرى.' });
     } finally {
       setLoading(false);
