@@ -33,9 +33,14 @@ const OrdersPage = () => {
     notes: ''
   });
 
-  // ✅ جلب طلبات المستخدم من Supabase
+  // ✅ جلب طلبات المستخدم من Supabase (مع تخطي الأدمن)
   const fetchUserOrders = async () => {
-    if (!user) return;
+    // ✅ لو أدمن (local) مش مسجل في Supabase، اتخطى
+    if (!user || user.id?.startsWith('admin-')) {
+      setUserOrders([]);
+      setLoading(false);
+      return;
+    }
 
     try {
       setLoading(true);
