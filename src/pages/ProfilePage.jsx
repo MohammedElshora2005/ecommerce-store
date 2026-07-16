@@ -33,6 +33,18 @@ const ProfilePage = () => {
   // ✅ جلب بيانات المستخدم من allUsers
   useEffect(() => {
     if (allUsers && allUsers.length > 0 && user) {
+      // ✅ لو أدمن (local)، استخدم user نفسه
+      if (user.id?.startsWith('admin-')) {
+        setUserData({
+          ...user,
+          loyaltyPoints: user?.loyaltyPoints || 0,
+          loyaltyLevel: user?.loyaltyLevel || 'برونزي',
+          totalSpent: user?.totalSpent || 0,
+          orders: user?.orders || 0
+        });
+        return;
+      }
+      
       const foundUser = allUsers.find(u => u.id === user.id);
       if (foundUser) {
         setUserData(foundUser);
@@ -125,17 +137,25 @@ const ProfilePage = () => {
     setLoading(true);
 
     try {
-      const result = await updateProfile({
-        name: formData.name,
-        phone: formData.phone,
-        avatar: formData.avatar
-      });
+      // ✅ تجهيز البيانات للتحديث
+      const updateData = {
+        name: formData.name || user?.user_metadata?.name || '',
+        phone: formData.phone || '',
+        avatar: formData.avatar || user?.avatar || ''
+      };
+      
+      const result = await updateProfile(updateData);
 
       if (result.success) {
         toast.success('✅ تم تحديث الملف الشخصي بنجاح');
         setIsEditing(false);
         // ✅ تحديث allUsers تاني عشان يجيب البيانات الجديدة
         await fetchAllUsers();
+        // ✅ تحديث userData محلياً
+        setUserData(prev => ({
+          ...prev,
+          ...updateData
+        }));
         setTimeout(() => window.location.reload(), 500);
       } else {
         toast.error(`❌ ${result.error || 'فشل تحديث الملف'}`);
