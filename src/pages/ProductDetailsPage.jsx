@@ -5,7 +5,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useCart } from '../hooks/useCart';
 import { useAuth } from '../hooks/useAuth';
 import LoadingSpinner from '../components/common/LoadingSpinner';
-import { products, getProductById } from '../api/products';
+import { supabase } from '../lib/supabase';
 import {
   ArrowLeftIcon,
   ShoppingCartIcon,
@@ -38,44 +38,53 @@ const ProductDetailsPage = () => {
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [relatedProducts, setRelatedProducts] = useState([]);
 
-  // جلب بيانات المنتج
+  // ✅ جلب بيانات المنتج من Supabase
   useEffect(() => {
-    const fetchProduct = () => {
+    const fetchProduct = async () => {
       setLoading(true);
       try {
-        // محاكاة جلب البيانات من API
-        setTimeout(() => {
-          const foundProduct = getProductById(parseInt(id));
+        // جلب المنتج
+        const { data: productData, error: productError } = await supabase
+          .from('products')
+          .select('*')
+          .eq('id', parseInt(id))
+          .single();
+        
+        if (productError) throw productError;
+        
+        if (productData) {
+          setProduct(productData);
           
-          if (foundProduct) {
-            setProduct(foundProduct);
-            
-            // جلب منتجات مشابهة (نفس التصنيف)
-            const related = products
-              .filter(p => p.category === foundProduct.category && p.id !== foundProduct.id)
-              .slice(0, 4);
-            setRelatedProducts(related);
-          } else {
-            // المنتج غير موجود
-            navigate('/products', { state: { error: 'المنتج غير موجود' } });
+          // جلب منتجات مشابهة (نفس التصنيف)
+          const { data: relatedData, error: relatedError } = await supabase
+            .from('products')
+            .select('*')
+            .eq('category', productData.category)
+            .neq('id', productData.id)
+            .limit(4);
+          
+          if (!relatedError) {
+            setRelatedProducts(relatedData || []);
           }
-          
-          setLoading(false);
-        }, 500);
+        } else {
+          navigate('/products', { state: { error: 'المنتج غير موجود' } });
+        }
       } catch (error) {
         console.error('Error fetching product:', error);
-        setLoading(false);
         navigate('/products');
+      } finally {
+        setLoading(false);
       }
     };
 
-    fetchProduct();
+    if (id) {
+      fetchProduct();
+    }
   }, [id, navigate]);
 
-  // التحقق من وجود المنتج في المفضلة (محاكاة)
+  // التحقق من وجود المنتج في المفضلة
   useEffect(() => {
     if (product) {
-      // محاكاة: التحقق من المفضلة (يمكن ربطها بـ Supabase بعدين)
       const wishlist = JSON.parse(localStorage.getItem('wishlist') || '[]');
       setIsWishlisted(wishlist.includes(product.id));
     }
@@ -145,7 +154,6 @@ const ProductDetailsPage = () => {
         url: window.location.href,
       });
     } else {
-      // نسخ الرابط
       navigator.clipboard.writeText(window.location.href);
       alert('تم نسخ رابط المنتج!');
     }
@@ -163,8 +171,8 @@ const ProductDetailsPage = () => {
 
   // عرض التقييم بالنجوم
   const renderStars = (rating) => {
-    const fullStars = Math.floor(rating);
-    const hasHalfStar = rating % 1 >= 0.5;
+    const fullStars = Math.floor(rating || 0);
+    const hasHalfStar = (rating || 0) % 1 >= 0.5;
     const emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0);
 
     return (
@@ -178,7 +186,7 @@ const ProductDetailsPage = () => {
         {[...Array(emptyStars)].map((_, i) => (
           <StarIcon key={`empty-${i}`} className="h-5 w-5 text-gray-300" />
         ))}
-        <span className="mr-2 text-sm font-medium text-gray-700">{rating}</span>
+        <span className="mr-2 text-sm font-medium text-gray-700">{rating || 0}</span>
         <span className="text-sm text-gray-500">(120 تقييم)</span>
       </div>
     );
@@ -216,9 +224,10 @@ const ProductDetailsPage = () => {
             {/* الصورة الرئيسية */}
             <div className="relative aspect-square bg-gray-100 rounded-lg overflow-hidden mb-4">
               <img
-                src={product.image}
+                src={product.image || `https://picsum.photos/seed/${product.id}/600/600`}
                 alt={product.name}
                 className="w-full h-full object-cover"
+                onError={(e) => e.target.src = `https://picsum.photos/seed/${product.id}/600/600`}
               />
               
               {/* شارة المخزون */}
@@ -265,7 +274,7 @@ const ProductDetailsPage = () => {
                   }`}
                 >
                   <img
-                    src={`https://picsum.photos/id/${product.id + index + 10}/300/300`}
+                    src={`https://picsum.photos/seed/${product.id + index + 10}/300/300`}
                     alt={`${product.name} ${index + 1}`}
                     className="w-full h-full object-cover"
                   />
@@ -303,14 +312,14 @@ const ProductDetailsPage = () => {
               <span className="text-3xl font-bold text-blue-600">
                 {formatPrice(product.price)}
               </span>
-              {product.originalPrice && product.originalPrice > product.price && (
+              {product.original_price && product.original_price > product.price && (
                 <span className="text-lg text-gray-400 line-through">
-                  {formatPrice(product.originalPrice)}
+                  {formatPrice(product.original_price)}
                 </span>
               )}
-              {product.originalPrice && product.originalPrice > product.price && (
+              {product.original_price && product.original_price > product.price && (
                 <span className="text-sm bg-green-100 text-green-700 px-2 py-1 rounded-full">
-                  وفر {Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)}%
+                  وفر {Math.round(((product.original_price - product.price) / product.original_price) * 100)}%
                 </span>
               )}
             </div>
@@ -461,9 +470,10 @@ const ProductDetailsPage = () => {
               >
                 <div className="aspect-square bg-gray-100 overflow-hidden">
                   <img
-                    src={product.image}
+                    src={product.image || `https://picsum.photos/seed/${product.id}/400/400`}
                     alt={product.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    onError={(e) => e.target.src = `https://picsum.photos/seed/${product.id}/400/400`}
                   />
                 </div>
                 <div className="p-3">
