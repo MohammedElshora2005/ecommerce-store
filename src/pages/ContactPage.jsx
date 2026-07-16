@@ -1,4 +1,4 @@
-// ecommerce-store\src\pages\ContactPage.jsx
+// ecommerce-store/src/pages/ContactPage.jsx
 
 import React, { useState } from 'react';
 import axios from 'axios';
@@ -8,6 +8,9 @@ const ContactPage = () => {
   const [formData, setFormData] = useState({ name: '', email: '', message: '' });
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState({ type: '', message: '' });
+
+  // ✅ استخدام الرابط الديناميكي (يعتمد على البيئة)
+  const API_URL = import.meta.env.VITE_API_URL || 'https://ecommerce-store.vercel.app';
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -19,10 +22,12 @@ const ContactPage = () => {
     setStatus({ type: '', message: '' });
 
     try {
-      await axios.post('http://localhost:5000/api/send-email', formData);
+      // ✅ استخدام الرابط الديناميكي بدل localhost
+      await axios.post(`${API_URL}/api/send-email`, formData);
       setStatus({ type: 'success', message: '✅ تم إرسال رسالتك بنجاح! سنرد عليك قريباً.' });
       setFormData({ name: '', email: '', message: '' });
     } catch (error) {
+      console.error('Error sending email:', error);
       setStatus({ type: 'error', message: '❌ حدث خطأ أثناء الإرسال. حاول مرة أخرى.' });
     } finally {
       setLoading(false);
