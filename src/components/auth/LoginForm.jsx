@@ -15,7 +15,7 @@ import { toast } from 'react-toastify';
 
 const LoginForm = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: ''
@@ -95,26 +95,24 @@ const LoginForm = () => {
     }
   };
 
-  // تسجيل الدخول بجوجل (محاكاة)
+  // ✅ تسجيل الدخول بجوجل باستخدام Supabase
   const handleGoogleLogin = async () => {
     setIsLoading(true);
     setError('');
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-
-      const googleUser = {
-        id: 999,
-        email: 'user@gmail.com',
-        name: 'مستخدم جوجل',
-        avatar: 'https://ui-avatars.com/api/?name=Google+User&background=ea4335&color=fff'
-      };
-
-      localStorage.setItem('user', JSON.stringify(googleUser));
-      toast.success('✅ تم تسجيل الدخول بحساب جوجل بنجاح!');
-      navigate('/');
+      const result = await loginWithGoogle();
       
+      if (result.success) {
+        toast.success('✅ تم تسجيل الدخول بحساب جوجل بنجاح!');
+        // Supabase هيتولى التوجيه بعد المصادقة
+        // المستخدم هيتوجه تلقائياً للصفحة الرئيسية بعد الـ redirect
+      } else {
+        toast.error(`❌ ${result.error || 'فشل تسجيل الدخول بجوجل'}`);
+        setError(result.error || 'حدث خطأ أثناء تسجيل الدخول بجوجل');
+      }
     } catch (err) {
+      console.error('Google login error:', err);
       toast.error('❌ حدث خطأ أثناء تسجيل الدخول بجوجل');
       setError('حدث خطأ أثناء تسجيل الدخول بجوجل');
     } finally {
