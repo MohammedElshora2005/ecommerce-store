@@ -28,6 +28,7 @@ export const AuthProvider = ({ children }) => {
   // ✅ قراءة بيانات الأدمن من .env
   const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || 'admin1@gmail.com';
   const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'Admin@123';
+  const ADMIN_ID = '00000000-0000-0000-0000-000000000001'; // ✅ UUID وهمي ثابت
 
   // ✅ جلب المستخدمين من Supabase مع معالجة الخطأ
   const fetchAllUsers = async () => {
@@ -188,9 +189,9 @@ export const AuthProvider = ({ children }) => {
           console.error('Supabase admin login error:', supabaseError);
         }
         
-        // ✅ استخدام الإيميل كـ ID عشان يشتغل في العربة
+        // ✅ استخدام UUID وهمي بدل الإيميل
         const adminUser = {
-          id: ADMIN_EMAIL, // ✅ admin1@gmail.com
+          id: ADMIN_ID, // ✅ UUID وهمي
           email: ADMIN_EMAIL,
           name: 'أدمن الموقع',
           phone: '',
@@ -423,7 +424,7 @@ export const AuthProvider = ({ children }) => {
       }
       
       // ✅ لو الأدمن، تحديث localStorage بس
-      if (user.id === ADMIN_EMAIL) {
+      if (user.id === ADMIN_ID) {
         const updatedUser = {
           ...user,
           name: data.name || user.name,
@@ -560,7 +561,7 @@ export const AuthProvider = ({ children }) => {
   const updateUserStats = async (userId, orderTotal) => {
     try {
       // ✅ لو الأدمن، اتخطى
-      if (userId === ADMIN_EMAIL) {
+      if (userId === ADMIN_ID) {
         console.log('Admin user, skipping stats update');
         return;
       }
