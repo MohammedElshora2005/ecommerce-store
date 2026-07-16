@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useCart } from '../hooks/useCart';
 import { useAuth } from '../hooks/useAuth';
+import { supabase } from '../lib/supabase';
 import {
   ArrowLeftIcon,
   ShoppingCartIcon,
@@ -26,24 +27,30 @@ const OfferDetailsPage = () => {
   const [loading, setLoading] = useState(true);
   const [isAddingToCart, setIsAddingToCart] = useState(false);
 
+  // ✅ جلب العرض من Supabase
   useEffect(() => {
-    const loadOffer = () => {
+    const fetchOffer = async () => {
       setLoading(true);
       try {
-        const savedOffers = localStorage.getItem('offers');
-        if (savedOffers) {
-          const allOffers = JSON.parse(savedOffers);
-          const foundOffer = allOffers.find(o => o.id === id);
-          setOffer(foundOffer);
-        }
+        const { data, error } = await supabase
+          .from('offers')
+          .select('*')
+          .eq('id', id)
+          .single();
+        
+        if (error) throw error;
+        setOffer(data);
       } catch (error) {
-        console.error('Error loading offer:', error);
+        console.error('Error fetching offer:', error);
+        setOffer(null);
       } finally {
         setLoading(false);
       }
     };
 
-    loadOffer();
+    if (id) {
+      fetchOffer();
+    }
   }, [id]);
 
   const formatPrice = (price) => {
@@ -67,9 +74,11 @@ const OfferDetailsPage = () => {
   };
 
   const getOfferStatus = (offer) => {
+    if (!offer) return { label: 'غير موجود', color: 'bg-gray-100 text-gray-700' };
+    
     const now = new Date();
-    const start = new Date(offer.startDate);
-    const end = new Date(offer.endDate);
+    const start = new Date(offer.start_date);
+    const end = new Date(offer.end_date);
 
     if (!offer.active) return { label: 'غير نشط', color: 'bg-gray-100 text-gray-700' };
     if (now < start) return { label: 'لم يبدأ', color: 'bg-blue-100 text-blue-700' };
@@ -88,7 +97,7 @@ const OfferDetailsPage = () => {
       const product = {
         id: offer.id,
         name: offer.name,
-        price: offer.offerPrice,
+        price: offer.offer_price,
         image: offer.image || 'https://picsum.photos/seed/' + offer.id + '/300/300',
         stock: offer.stock || 999,
         category: offer.category || 'عروض',
@@ -129,9 +138,9 @@ const OfferDetailsPage = () => {
 
   const status = getOfferStatus(offer);
   const isActive = status.label === 'نشط';
-  const discountPercent = offer.discountValue || 
-    (offer.originalPrice > 0 && offer.offerPrice > 0 
-      ? Math.round(((offer.originalPrice - offer.offerPrice) / offer.originalPrice) * 100) 
+  const discountPercent = offer.discount_value || 
+    (offer.original_price > 0 && offer.offer_price > 0 
+      ? Math.round(((offer.original_price - offer.offer_price) / offer.original_price) * 100) 
       : 0);
 
   return (
@@ -205,11 +214,11 @@ const OfferDetailsPage = () => {
               {/* السعر */}
               <div className="flex items-baseline gap-3 mb-4">
                 <span className="text-3xl font-bold text-rose-600 dark:text-rose-400">
-                  {formatPrice(offer.offerPrice)}
+                  {formatPrice(offer.offer_price)}
                 </span>
-                {offer.originalPrice > 0 && (
+                {offer.original_price > 0 && (
                   <span className="text-lg text-gray-400 line-through">
-                    {formatPrice(offer.originalPrice)}
+                    {formatPrice(offer.original_price)}
                   </span>
                 )}
               </div>
@@ -225,7 +234,7 @@ const OfferDetailsPage = () => {
               <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-4">
                 <ClockIcon className="h-4 w-4" />
                 <span>
-                  {formatDate(offer.startDate)} - {formatDate(offer.endDate)}
+                  {formatDate(offer.start_date)} - {formatDate(offer.end_date)}
                 </span>
               </div>
 
