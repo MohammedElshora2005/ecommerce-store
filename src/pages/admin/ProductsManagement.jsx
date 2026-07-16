@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { products as initialProducts } from '../../api/products';
+import { supabase } from '../../lib/supabase';
 import {
   PlusIcon,
   PencilIcon,
@@ -48,24 +48,39 @@ const ProductsManagement = () => {
     rating: 0
   });
 
-  // تحميل المنتجات والتصنيفات والماركات
+  // ✅ جلب المنتجات من Supabase
+  const fetchProducts = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .order('id', { ascending: false });
+      
+      if (error) throw error;
+      setProducts(data || []);
+      
+      // استخراج التصنيفات والماركات الفريدة
+      if (data) {
+        const uniqueCategories = [...new Set(data.map(p => p.category).filter(Boolean))];
+        const uniqueBrands = [...new Set(data.map(p => p.brand).filter(Boolean))];
+        setCategories(uniqueCategories);
+        setBrands(uniqueBrands);
+      }
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      toast.error('❌ حدث خطأ أثناء تحميل المنتجات');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!isAdmin) {
       navigate('/');
       return;
     }
-
-    setTimeout(() => {
-      setProducts(initialProducts);
-      
-      // استخراج التصنيفات والماركات الفريدة
-      const uniqueCategories = [...new Set(initialProducts.map(p => p.category))];
-      const uniqueBrands = [...new Set(initialProducts.map(p => p.brand).filter(Boolean))];
-      
-      setCategories(uniqueCategories);
-      setBrands(uniqueBrands);
-      setLoading(false);
-    }, 500);
+    fetchProducts();
   }, [isAdmin, navigate]);
 
   // تنسيق السعر
@@ -81,8 +96,8 @@ const ProductsManagement = () => {
   // تصفية المنتجات
   const filteredProducts = products.filter(product => {
     const matchesSearch =
-      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (product.brand && product.brand.toLowerCase().includes(searchTerm.toLowerCase()));
 
     const matchesCategory = categoryFilter === 'all' || product.category === categoryFilter;
@@ -90,7 +105,7 @@ const ProductsManagement = () => {
     return matchesSearch && matchesCategory;
   });
 
-  // إضافة تصنيف جديد
+  // ✅ إضافة تصنيف جديد
   const handleAddCategory = () => {
     if (!newCategory.trim()) {
       toast.warning('⚠️ من فضلك أدخل اسم التصنيف');
@@ -100,14 +115,15 @@ const ProductsManagement = () => {
       toast.warning('⚠️ هذا التصنيف موجود بالفعل');
       return;
     }
-    setCategories([...categories, newCategory.trim()]);
+    const updatedCategories = [...categories, newCategory.trim()];
+    setCategories(updatedCategories);
     setFormData({ ...formData, category: newCategory.trim() });
     setNewCategory('');
     setShowNewCategoryInput(false);
     toast.success('✅ تم إضافة التصنيف الجديد');
   };
 
-  // إضافة ماركة جديدة
+  // ✅ إضافة ماركة جديدة
   const handleAddBrand = () => {
     if (!newBrand.trim()) {
       toast.warning('⚠️ من فضلك أدخل اسم الماركة');
@@ -117,36 +133,51 @@ const ProductsManagement = () => {
       toast.warning('⚠️ هذه الماركة موجودة بالفعل');
       return;
     }
-    setBrands([...brands, newBrand.trim()]);
+    const updatedBrands = [...brands, newBrand.trim()];
+    setBrands(updatedBrands);
     setFormData({ ...formData, brand: newBrand.trim() });
     setNewBrand('');
     setShowNewBrandInput(false);
     toast.success('✅ تم إضافة الماركة الجديدة');
   };
 
-  // إضافة منتج
-  const handleAddProduct = () => {
+  // ✅ إضافة منتج
+  const handleAddProduct = async () => {
     if (!formData.name || !formData.price || !formData.category) {
       toast.warning('⚠️ من فضلك املأ جميع الحقول المطلوبة');
       return;
     }
 
     const newProduct = {
-      id: Date.now(),
-      ...formData,
+      name: formData.name,
       price: parseFloat(formData.price),
+      description: formData.description || '',
+      category: formData.category,
       stock: parseInt(formData.stock) || 0,
-      rating: parseFloat(formData.rating) || 0,
-      image: formData.image || 'https://picsum.photos/seed/' + Date.now() + '/300/300'
+      image: formData.image || `https://picsum.photos/seed/${Date.now()}/300/300`,
+      brand: formData.brand || '',
+      rating: parseFloat(formData.rating) || 0
     };
 
-    setProducts([newProduct, ...products]);
-    setShowAddModal(false);
-    resetForm();
-    toast.success('✅ تم إضافة المنتج بنجاح');
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .insert([newProduct])
+        .select();
+      
+      if (error) throw error;
+      
+      toast.success('✅ تم إضافة المنتج بنجاح');
+      setShowAddModal(false);
+      resetForm();
+      fetchProducts();
+    } catch (error) {
+      console.error('Error adding product:', error);
+      toast.error('❌ حدث خطأ أثناء إضافة المنتج');
+    }
   };
 
-  // تعديل منتج
+  // ✅ تعديل منتج
   const handleEditProduct = (product) => {
     setEditingProduct(product);
     setFormData({
@@ -161,41 +192,58 @@ const ProductsManagement = () => {
     });
   };
 
-  const handleUpdateProduct = () => {
+  const handleUpdateProduct = async () => {
     if (!formData.name || !formData.price || !formData.category) {
       toast.warning('⚠️ من فضلك املأ جميع الحقول المطلوبة');
       return;
     }
 
-    // إضافة التصنيف أو الماركة الجديدة للقوائم لو مش موجودة
-    if (!categories.includes(formData.category)) {
-      setCategories([...categories, formData.category]);
-    }
-    if (formData.brand && !brands.includes(formData.brand)) {
-      setBrands([...brands, formData.brand]);
-    }
+    const updatedProduct = {
+      name: formData.name,
+      price: parseFloat(formData.price),
+      description: formData.description || '',
+      category: formData.category,
+      stock: parseInt(formData.stock) || 0,
+      image: formData.image || '',
+      brand: formData.brand || '',
+      rating: parseFloat(formData.rating) || 0
+    };
 
-    const updated = products.map(p =>
-      p.id === editingProduct.id ? {
-        ...p,
-        ...formData,
-        price: parseFloat(formData.price),
-        stock: parseInt(formData.stock) || 0,
-        rating: parseFloat(formData.rating) || 0
-      } : p
-    );
-
-    setProducts(updated);
-    setEditingProduct(null);
-    resetForm();
-    toast.success('✅ تم تحديث المنتج بنجاح');
+    try {
+      const { error } = await supabase
+        .from('products')
+        .update(updatedProduct)
+        .eq('id', editingProduct.id);
+      
+      if (error) throw error;
+      
+      toast.success('✅ تم تحديث المنتج بنجاح');
+      setEditingProduct(null);
+      resetForm();
+      fetchProducts();
+    } catch (error) {
+      console.error('Error updating product:', error);
+      toast.error('❌ حدث خطأ أثناء تحديث المنتج');
+    }
   };
 
-  // حذف منتج
-  const handleDeleteProduct = (id) => {
-    setProducts(products.filter(p => p.id !== id));
-    setShowDeleteConfirm(null);
-    toast.success('✅ تم حذف المنتج بنجاح');
+  // ✅ حذف منتج
+  const handleDeleteProduct = async (id) => {
+    try {
+      const { error } = await supabase
+        .from('products')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+      
+      toast.success('✅ تم حذف المنتج بنجاح');
+      setShowDeleteConfirm(null);
+      fetchProducts();
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      toast.error('❌ حدث خطأ أثناء حذف المنتج');
+    }
   };
 
   // إعادة تعيين الفورم
@@ -426,7 +474,7 @@ const ProductsManagement = () => {
         </div>
       </div>
 
-      {/* ✅ مودال إضافة منتج - مع قوائم التصنيفات والماركات */}
+      {/* مودال إضافة منتج */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
@@ -444,7 +492,6 @@ const ProductsManagement = () => {
             </div>
 
             <div className="space-y-3">
-              {/* اسم المنتج */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">اسم المنتج *</label>
                 <input
@@ -457,7 +504,6 @@ const ProductsManagement = () => {
                 />
               </div>
 
-              {/* السعر */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">السعر *</label>
                 <input
@@ -471,7 +517,6 @@ const ProductsManagement = () => {
                 />
               </div>
 
-              {/* ✅ التصنيف - قائمة منسدلة مع إضافة جديد */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">التصنيف *</label>
                 <div className="flex gap-2">
@@ -494,13 +539,11 @@ const ProductsManagement = () => {
                       setFormData({ ...formData, category: '' });
                     }}
                     className="px-3 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
-                    title="إضافة تصنيف جديد"
                   >
                     <PlusCircleIcon className="h-5 w-5" />
                   </button>
                 </div>
                 
-                {/* حقل إضافة تصنيف جديد */}
                 {showNewCategoryInput && (
                   <div className="mt-2 flex gap-2">
                     <input
@@ -529,7 +572,6 @@ const ProductsManagement = () => {
                 )}
               </div>
 
-              {/* ✅ الماركة - قائمة منسدلة مع إضافة جديد */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">الماركة</label>
                 <div className="flex gap-2">
@@ -551,13 +593,11 @@ const ProductsManagement = () => {
                       setFormData({ ...formData, brand: '' });
                     }}
                     className="px-3 py-2 bg-purple-600 dark:bg-purple-500 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 transition-colors"
-                    title="إضافة ماركة جديدة"
                   >
                     <PlusCircleIcon className="h-5 w-5" />
                   </button>
                 </div>
                 
-                {/* حقل إضافة ماركة جديدة */}
                 {showNewBrandInput && (
                   <div className="mt-2 flex gap-2">
                     <input
@@ -586,7 +626,6 @@ const ProductsManagement = () => {
                 )}
               </div>
 
-              {/* الوصف */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">الوصف</label>
                 <textarea
@@ -598,7 +637,6 @@ const ProductsManagement = () => {
                 />
               </div>
 
-              {/* المخزون */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">المخزون</label>
                 <input
@@ -611,7 +649,6 @@ const ProductsManagement = () => {
                 />
               </div>
 
-              {/* رابط الصورة */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">رابط الصورة</label>
                 <input
@@ -623,7 +660,6 @@ const ProductsManagement = () => {
                 />
               </div>
 
-              {/* التقييم */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">التقييم (0-5)</label>
                 <input
@@ -649,7 +685,7 @@ const ProductsManagement = () => {
         </div>
       )}
 
-      {/* مودال تعديل منتج - نفس التعديلات */}
+      {/* مودال تعديل منتج */}
       {editingProduct && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
@@ -667,7 +703,7 @@ const ProductsManagement = () => {
             </div>
 
             <div className="space-y-3">
-              {/* اسم المنتج */}
+              {/* نفس حقول الإضافة */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">اسم المنتج *</label>
                 <input
@@ -680,7 +716,6 @@ const ProductsManagement = () => {
                 />
               </div>
 
-              {/* السعر */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">السعر *</label>
                 <input
@@ -694,7 +729,6 @@ const ProductsManagement = () => {
                 />
               </div>
 
-              {/* التصنيف - قائمة منسدلة مع إضافة جديد */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">التصنيف *</label>
                 <div className="flex gap-2">
@@ -750,7 +784,6 @@ const ProductsManagement = () => {
                 )}
               </div>
 
-              {/* الماركة - قائمة منسدلة مع إضافة جديد */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">الماركة</label>
                 <div className="flex gap-2">
@@ -805,7 +838,6 @@ const ProductsManagement = () => {
                 )}
               </div>
 
-              {/* الوصف */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">الوصف</label>
                 <textarea
@@ -817,7 +849,6 @@ const ProductsManagement = () => {
                 />
               </div>
 
-              {/* المخزون */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">المخزون</label>
                 <input
@@ -830,7 +861,6 @@ const ProductsManagement = () => {
                 />
               </div>
 
-              {/* رابط الصورة */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">رابط الصورة</label>
                 <input
@@ -842,7 +872,6 @@ const ProductsManagement = () => {
                 />
               </div>
 
-              {/* التقييم */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">التقييم (0-5)</label>
                 <input
