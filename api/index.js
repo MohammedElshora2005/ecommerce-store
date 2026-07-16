@@ -1,4 +1,4 @@
-// ecommerce-store\api\index.js
+// ecommerce-store/api/index.js
 
 import express from 'express';
 import cors from 'cors';
@@ -8,7 +8,14 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const app = express();
-app.use(cors());
+
+// ✅ CORS configuration - السماح لجميع الـ origins
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(express.json());
 
 const transporter = nodemailer.createTransport({
@@ -19,8 +26,19 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+// ✅ Handle preflight requests for /api/send-email
+app.options('/api/send-email', cors());
+
 app.post('/api/send-email', async (req, res) => {
   const { name, email, message } = req.body;
+
+  // ✅ التحقق من البيانات
+  if (!name || !email || !message) {
+    return res.status(400).json({ 
+      success: false, 
+      message: 'جميع الحقول مطلوبة' 
+    });
+  }
 
   try {
     await transporter.sendMail({
@@ -40,8 +58,16 @@ app.post('/api/send-email', async (req, res) => {
     res.json({ success: true, message: 'تم الإرسال بنجاح!' });
   } catch (error) {
     console.error('Error sending email:', error);
-    res.status(500).json({ success: false, message: 'فشل الإرسال' });
+    res.status(500).json({ 
+      success: false, 
+      message: 'فشل الإرسال: ' + error.message 
+    });
   }
+});
+
+// ✅ لو مش لاقي route
+app.use((req, res) => {
+  res.status(404).json({ error: 'Route not found' });
 });
 
 export default app;
