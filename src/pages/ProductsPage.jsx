@@ -7,7 +7,7 @@ import { useAuth } from '../hooks/useAuth';
 import ProductList from '../components/products/ProductList';
 import ProductFilters from '../components/products/ProductFilters';
 import LoadingSpinner from '../components/common/LoadingSpinner';
-import { products, getCategories, searchProducts } from '../api/products';
+import { supabase } from '../lib/supabase';
 import { 
   FunnelIcon,
   XMarkIcon,
@@ -25,6 +25,8 @@ const ProductsPage = () => {
   const [viewMode, setViewMode] = useState('grid');
   const [wishlist, setWishlist] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
+  const [categories, setCategories] = useState([]);
+  const [brands, setBrands] = useState([]);
   const [filters, setFilters] = useState({
     search: searchParams.get('search') || '',
     category: searchParams.get('category') || '',
@@ -36,30 +38,36 @@ const ProductsPage = () => {
     sortBy: 'newest'
   });
 
-  // جلب التصنيفات والمنتجات
-  const categories = useMemo(() => getCategories(), []);
-  const brands = useMemo(() => {
-    const allBrands = products.map(p => p.brand).filter(Boolean);
-    return [...new Set(allBrands)];
-  }, []);
+  // ✅ جلب المنتجات من Supabase
+  const fetchProducts = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .order('id', { ascending: false });
+      
+      if (error) throw error;
+      
+      setAllProducts(data || []);
+      setFilteredProducts(data || []);
+      
+      // استخراج التصنيفات والماركات
+      if (data) {
+        const uniqueCategories = [...new Set(data.map(p => p.category).filter(Boolean))];
+        const uniqueBrands = [...new Set(data.map(p => p.brand).filter(Boolean))];
+        setCategories(uniqueCategories);
+        setBrands(uniqueBrands);
+      }
+    } catch (error) {
+      console.error('Error fetching products:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // تحميل المنتجات
   useEffect(() => {
-    const fetchProducts = () => {
-      setLoading(true);
-      try {
-        // محاكاة جلب البيانات من API
-        setTimeout(() => {
-          setAllProducts(products);
-          setFilteredProducts(products);
-          setLoading(false);
-        }, 500);
-      } catch (error) {
-        console.error('Error fetching products:', error);
-        setLoading(false);
-      }
-    };
-
     fetchProducts();
   }, []);
 
@@ -77,7 +85,13 @@ const ProductsPage = () => {
 
     // بحث
     if (filters.search) {
-      result = searchProducts(filters.search);
+      const searchLower = filters.search.toLowerCase();
+      result = result.filter(p => 
+        p.name?.toLowerCase().includes(searchLower) ||
+        p.description?.toLowerCase().includes(searchLower) ||
+        p.brand?.toLowerCase().includes(searchLower) ||
+        p.category?.toLowerCase().includes(searchLower)
+      );
     }
 
     // تصنيف
@@ -117,14 +131,14 @@ const ProductsPage = () => {
         result.sort((a, b) => b.price - a.price);
         break;
       case 'rating':
-        result.sort((a, b) => b.rating - a.rating);
+        result.sort((a, b) => (b.rating || 0) - (a.rating || 0));
         break;
       case 'popular':
         result.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
         break;
       case 'newest':
       default:
-        result.sort((a, b) => b.id - a.id);
+        result.sort((a, b) => (b.id || 0) - (a.id || 0));
         break;
     }
 
@@ -158,7 +172,6 @@ const ProductsPage = () => {
   // إضافة للمفضلة
   const handleToggleWishlist = (productId) => {
     if (!isAuthenticated) {
-      // يمكن إضافة رسالة أو توجيه لتسجيل الدخول
       return;
     }
 
@@ -176,10 +189,8 @@ const ProductsPage = () => {
   // إضافة للعربة
   const handleAddToCart = async (product) => {
     if (!isAuthenticated) {
-      // يمكن إضافة رسالة أو توجيه لتسجيل الدخول
       return;
     }
-
     await addToCart(product);
   };
 
