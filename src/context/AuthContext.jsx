@@ -414,20 +414,13 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       setError(null);
       
-      if (user) {
-        // تحديث في Supabase
-        const { error: updateError } = await supabase
-          .from('users')
-          .update({
-            name: data.name || user.name,
-            phone: data.phone || user.phone || '',
-            avatar: data.avatar || user.avatar || ''
-          })
-          .eq('id', user.id);
-        
-        if (updateError) throw updateError;
-        
-        // تحديث في localStorage
+      if (!user) {
+        return { success: false, error: 'لا يوجد مستخدم مسجل' };
+      }
+      
+      // ✅ لو المستخدم أدمن (local) محدثش في Supabase
+      if (user.id?.startsWith('admin-')) {
+        // تحديث في localStorage بس
         const updatedUser = {
           ...user,
           name: data.name || user.name,
@@ -446,7 +439,47 @@ export const AuthProvider = ({ children }) => {
         setAllUsers(prev => prev.map(u => 
           u.id === user.id ? { ...u, name: data.name || u.name, phone: data.phone || u.phone, avatar: data.avatar || u.avatar } : u
         ));
+        
+        return { success: true };
       }
+      
+      // ✅ للمستخدمين العاديين (Supabase)
+      // تجهيز البيانات للتحديث
+      const updateData = {};
+      if (data.name) updateData.name = data.name;
+      if (data.phone !== undefined) updateData.phone = data.phone || '';
+      if (data.avatar) updateData.avatar = data.avatar;
+      
+      // تحديث في Supabase
+      const { error: updateError } = await supabase
+        .from('users')
+        .update(updateData)
+        .eq('id', user.id);
+      
+      if (updateError) {
+        console.error('Supabase update error:', updateError);
+        throw updateError;
+      }
+      
+      // تحديث في localStorage
+      const updatedUser = {
+        ...user,
+        name: data.name || user.name,
+        phone: data.phone || user.phone || '',
+        avatar: data.avatar || user.avatar || '',
+        user_metadata: {
+          ...user.user_metadata,
+          name: data.name || user.user_metadata?.name
+        }
+      };
+      
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      setUser(updatedUser);
+      
+      // تحديث allUsers
+      setAllUsers(prev => prev.map(u => 
+        u.id === user.id ? { ...u, name: data.name || u.name, phone: data.phone || u.phone, avatar: data.avatar || u.avatar } : u
+      ));
       
       return { success: true };
     } catch (err) {
@@ -529,6 +562,12 @@ export const AuthProvider = ({ children }) => {
   // ✅ تحديث إحصائيات المستخدم
   const updateUserStats = async (userId, orderTotal) => {
     try {
+      // ✅ لو أدمن، متحدثش
+      if (userId?.startsWith('admin-')) {
+        console.log('Admin user, skipping stats update');
+        return;
+      }
+      
       // جلب بيانات المستخدم الحالية
       const { data: userData, error: fetchError } = await supabase
         .from('users')
