@@ -28,7 +28,7 @@ export const AuthProvider = ({ children }) => {
   // ✅ قراءة بيانات الأدمن من .env
   const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || 'admin1@gmail.com';
   const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'Admin@123';
-  const ADMIN_ID = '00000000-0000-0000-0000-000000000001'; // ✅ UUID وهمي ثابت
+  const ADMIN_ID = '3071f354-ced1-4d10-9e87-4f1984b11c34'; // ✅ UUID حقيقي
 
   // ✅ جلب المستخدمين من Supabase مع معالجة الخطأ
   const fetchAllUsers = async () => {
@@ -189,9 +189,9 @@ export const AuthProvider = ({ children }) => {
           console.error('Supabase admin login error:', supabaseError);
         }
         
-        // ✅ استخدام UUID وهمي بدل الإيميل
+        // ✅ استخدام UUID الحقيقي
         const adminUser = {
-          id: ADMIN_ID, // ✅ UUID وهمي
+          id: ADMIN_ID,
           email: ADMIN_EMAIL,
           name: 'أدمن الموقع',
           phone: '',
