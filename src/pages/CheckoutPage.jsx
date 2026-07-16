@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../hooks/useCart';
 import { useAuth } from '../hooks/useAuth';
+import { supabase } from '../lib/supabase';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import CartSummary from '../components/cart/CartSummary';
 import {
@@ -27,8 +28,7 @@ const CheckoutPage = () => {
     loading,
     getTotalItems,
     getTotalPrice,
-    clearCart,
-    createOrder
+    clearCart
   } = useCart();
 
   const [formData, setFormData] = useState({
@@ -122,7 +122,60 @@ const CheckoutPage = () => {
     }
   };
 
-  // ✅ معالجة تقديم الطلب
+  // ✅ تحديث نقاط الولاء في Supabase
+  const updateUserStats = async (userId, orderTotal) => {
+    try {
+      // جلب بيانات المستخدم الحالية
+      const { data: userData, error: fetchError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      
+      if (fetchError) throw fetchError;
+      
+      // حساب نقاط الولاء
+      const pointsEarned = Math.floor(orderTotal / 100) * 10;
+      const newTotalPoints = (userData?.loyalty_points || 0) + pointsEarned;
+      
+      // تحديد مستوى الولاء
+      let loyaltyLevel = 'برونزي';
+      if (newTotalPoints >= 500) loyaltyLevel = 'ذهبي';
+      else if (newTotalPoints >= 200) loyaltyLevel = 'فضي';
+      
+      // تحديث في Supabase
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({
+          orders: (userData?.orders || 0) + 1,
+          total_spent: (userData?.total_spent || 0) + orderTotal,
+          loyalty_points: newTotalPoints,
+          loyalty_level: loyaltyLevel
+        })
+        .eq('id', userId);
+      
+      if (updateError) throw updateError;
+      
+      // تحديث المستخدم في localStorage
+      if (user && user.id === userId) {
+        const updatedUser = {
+          ...user,
+          orders: (user.orders || 0) + 1,
+          totalSpent: (user.totalSpent || 0) + orderTotal,
+          loyaltyPoints: newTotalPoints,
+          loyaltyLevel: loyaltyLevel
+        };
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+      }
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating user stats:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  // ✅ إنشاء الطلب في Supabase
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -140,40 +193,54 @@ const CheckoutPage = () => {
       return;
     }
 
-    // ✅ التحقق من وجود مستخدم
     if (!user) {
       toast.error('❌ يجب تسجيل الدخول لإتمام الطلب');
       navigate('/login');
       return;
     }
 
-    console.log('👤 User ID:', user.id);
-    console.log('📦 Cart items:', cartItems);
-
     setIsSubmitting(true);
 
     try {
+      const orderId = `ORD-${Date.now().toString().slice(-8)}-${Math.floor(Math.random() * 1000)}`;
+      
       const orderData = {
-        customerName: formData.fullName,
+        id: orderId,
+        customer: formData.fullName,
         email: formData.email,
         phone: formData.phone,
-        address: `${formData.address}، ${formData.city}`,
+        date: new Date().toISOString().split('T')[0],
+        status: 'pending',
         total: finalTotal,
-        notes: formData.notes,
-        shippingMethod: shippingMethod,
-        paymentMethod: paymentMethod,
-        userId: user.id // ✅ تأكد من إرسال userId
+        address: `${formData.address}، ${formData.city}`,
+        user_id: user.id,
+        notes: formData.notes || '',
+        shipping_method: shippingMethod,
+        payment_method: paymentMethod,
+        items: cartItems.map(item => ({
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price
+        }))
       };
 
-      const result = await createOrder(orderData);
+      // ✅ حفظ الطلب في Supabase
+      const { error: orderError } = await supabase
+        .from('orders')
+        .insert([orderData]);
       
-      if (result.success) {
-        toast.success('✅ تم إنشاء الطلب بنجاح!');
-        setOrderNumber(result.order.id);
-        setOrderSuccess(true);
-      } else {
-        toast.error(`❌ ${result.error || 'حدث خطأ أثناء إنشاء الطلب'}`);
-      }
+      if (orderError) throw orderError;
+
+      // ✅ تحديث نقاط الولاء
+      await updateUserStats(user.id, finalTotal);
+
+      // ✅ تفريغ العربة محلياً
+      await clearCart();
+
+      toast.success('✅ تم إنشاء الطلب بنجاح!');
+      setOrderNumber(orderId);
+      setOrderSuccess(true);
+
     } catch (error) {
       console.error('Error placing order:', error);
       toast.error('❌ حدث خطأ أثناء إنشاء الطلب. من فضلك حاول مرة أخرى');
