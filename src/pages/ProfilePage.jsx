@@ -18,7 +18,7 @@ import {
 import { toast } from 'react-toastify';
 
 const ProfilePage = () => {
-  const { user, updateProfile, allUsers } = useAuth();
+  const { user, updateProfile, allUsers, fetchAllUsers } = useAuth();
   const fileInputRef = useRef(null);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
@@ -28,22 +28,48 @@ const ProfilePage = () => {
   });
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [userData, setUserData] = useState(null);
 
-  // ✅✅✅ الحل: جلب بيانات المستخدم من allUsers وليس من user ✅✅✅
-  const userData = allUsers?.find(u => u.id === user?.id);
-  
-  // ✅ استخدام userData إذا موجود، وإلا استخدم user
-  const loyaltyPoints = userData?.loyaltyPoints ?? 0;
-  const loyaltyLevel = userData?.loyaltyLevel ?? 'برونزي';
-  const totalSpent = userData?.totalSpent ?? 0;
-  const ordersCount = userData?.orders ?? 0;
-
-  // ✅✅✅ تحديث البيانات عند تغيير allUsers ✅✅✅
+  // ✅ جلب بيانات المستخدم من allUsers
   useEffect(() => {
-    // تحديث الصفحة عند تغيير allUsers
-    console.log('🔄 ProfilePage: allUsers changed, updating data...');
-    console.log('📊 New userData:', userData);
-  }, [allUsers, userData]);
+    if (allUsers && allUsers.length > 0 && user) {
+      const foundUser = allUsers.find(u => u.id === user.id);
+      if (foundUser) {
+        setUserData(foundUser);
+      } else {
+        // ✅ لو مش موجود في allUsers، استخدم user كـ fallback
+        setUserData({
+          ...user,
+          loyaltyPoints: user?.loyaltyPoints || 0,
+          loyaltyLevel: user?.loyaltyLevel || 'برونزي',
+          totalSpent: user?.totalSpent || 0,
+          orders: user?.orders || 0
+        });
+      }
+    } else if (user) {
+      // ✅ لو allUsers لسه محملتش، استخدم user كـ fallback
+      setUserData({
+        ...user,
+        loyaltyPoints: user?.loyaltyPoints || 0,
+        loyaltyLevel: user?.loyaltyLevel || 'برونزي',
+        totalSpent: user?.totalSpent || 0,
+        orders: user?.orders || 0
+      });
+    }
+  }, [allUsers, user]);
+
+  // ✅ جلب allUsers عند تحميل الصفحة
+  useEffect(() => {
+    if (user) {
+      fetchAllUsers();
+    }
+  }, [user]);
+
+  // ✅ استخدام userData إذا موجود، وإلا استخدم user
+  const loyaltyPoints = userData?.loyaltyPoints ?? user?.loyaltyPoints ?? 0;
+  const loyaltyLevel = userData?.loyaltyLevel ?? user?.loyaltyLevel ?? 'برونزي';
+  const totalSpent = userData?.totalSpent ?? user?.totalSpent ?? 0;
+  const ordersCount = userData?.orders ?? user?.orders ?? 0;
 
   // ✅ الحصول على مستوى الولاء
   const getLoyaltyLevelInfo = (level) => {
@@ -108,6 +134,8 @@ const ProfilePage = () => {
       if (result.success) {
         toast.success('✅ تم تحديث الملف الشخصي بنجاح');
         setIsEditing(false);
+        // ✅ تحديث allUsers تاني عشان يجيب البيانات الجديدة
+        await fetchAllUsers();
         setTimeout(() => window.location.reload(), 500);
       } else {
         toast.error(`❌ ${result.error || 'فشل تحديث الملف'}`);
