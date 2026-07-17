@@ -9,13 +9,12 @@ import {
   EyeSlashIcon,
   UserIcon 
 } from '@heroicons/react/24/outline';
-import { FcGoogle } from 'react-icons/fc';
 import { useAuth } from '../../hooks/useAuth';
 import { toast } from 'react-toastify';
 
 const LoginForm = () => {
   const navigate = useNavigate();
-  const { login, loginWithGoogle } = useAuth();
+  const { login } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: ''
@@ -90,31 +89,6 @@ const LoginForm = () => {
       console.error('Login error:', err);
       toast.error('❌ حدث خطأ أثناء تسجيل الدخول. حاول مرة أخرى');
       setError('حدث خطأ أثناء تسجيل الدخول');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // ✅ تسجيل الدخول بجوجل باستخدام Supabase
-  const handleGoogleLogin = async () => {
-    setIsLoading(true);
-    setError('');
-
-    try {
-      const result = await loginWithGoogle();
-      
-      if (result.success) {
-        toast.success('✅ تم تسجيل الدخول بحساب جوجل بنجاح!');
-        // Supabase هيتولى التوجيه بعد المصادقة
-        // المستخدم هيتوجه تلقائياً للصفحة الرئيسية بعد الـ redirect
-      } else {
-        toast.error(`❌ ${result.error || 'فشل تسجيل الدخول بجوجل'}`);
-        setError(result.error || 'حدث خطأ أثناء تسجيل الدخول بجوجل');
-      }
-    } catch (err) {
-      console.error('Google login error:', err);
-      toast.error('❌ حدث خطأ أثناء تسجيل الدخول بجوجل');
-      setError('حدث خطأ أثناء تسجيل الدخول بجوجل');
     } finally {
       setIsLoading(false);
     }
@@ -244,27 +218,6 @@ const LoginForm = () => {
           ) : (
             'تسجيل الدخول'
           )}
-        </button>
-
-        {/* فصل بين تسجيل الدخول العادي وجوجل */}
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-300"></div>
-          </div>
-          <div className="relative flex justify-center text-sm">
-            <span className="px-2 bg-white text-gray-500">أو</span>
-          </div>
-        </div>
-
-        {/* زر تسجيل الدخول بجوجل */}
-        <button
-          type="button"
-          onClick={handleGoogleLogin}
-          disabled={isLoading}
-          className="w-full py-3 px-4 bg-white border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-all duration-200 flex items-center justify-center space-x-2 space-x-reverse"
-        >
-          <FcGoogle className="h-5 w-5" />
-          <span>تسجيل الدخول بحساب جوجل</span>
         </button>
 
         {/* رابط إنشاء حساب جديد */}
