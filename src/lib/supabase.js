@@ -24,4 +24,7 @@ export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '', {
   }
 });
 
+// ✅ تصدير الـ supabase للاستخدام في Console
+window.supabase = supabase;
+
 export default supabase;
