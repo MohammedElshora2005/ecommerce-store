@@ -262,16 +262,19 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ✅ تسجيل الدخول بجوجل - مع الرابط الصحيح ومعالجة الأخطاء
+  // ✅ تسجيل الدخول بجوجل - مع window.location.origin
   const loginWithGoogle = async () => {
     try {
       setLoading(true);
       setError(null);
       
+      // ✅ استخدم الرابط الحالي ديناميكياً
+      const redirectUrl = window.location.origin;
+      
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: 'https://ecommerce-store-five-lyart.vercel.app'
+          redirectTo: redirectUrl
         }
       });
       
