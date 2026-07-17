@@ -262,7 +262,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ✅ تسجيل الدخول بجوجل - مع الرابط الصحيح
+  // ✅ تسجيل الدخول بجوجل - مع الرابط الصحيح ومعالجة الأخطاء
   const loginWithGoogle = async () => {
     try {
       setLoading(true);
@@ -271,11 +271,14 @@ export const AuthProvider = ({ children }) => {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: 'https://ecommerce-store-five-lyart.vercel.app' // ✅ الرابط الحقيقي
+          redirectTo: 'https://ecommerce-store-five-lyart.vercel.app'
         }
       });
       
-      if (error) throw error;
+      if (error) {
+        console.error('Google OAuth error:', error);
+        throw error;
+      }
       
       return { success: true, data };
     } catch (err) {
