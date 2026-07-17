@@ -11,13 +11,12 @@ import {
   CheckCircleIcon,
   XCircleIcon
 } from '@heroicons/react/24/outline';
-import { FcGoogle } from 'react-icons/fc';
 import { useAuth } from '../../hooks/useAuth';
 import { toast } from 'react-toastify';
 
 const RegisterForm = () => {
   const navigate = useNavigate();
-  const { register, loginWithGoogle } = useAuth();
+  const { register } = useAuth();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -131,27 +130,6 @@ const RegisterForm = () => {
       console.error('Register error:', err);
       toast.error('❌ حدث خطأ أثناء إنشاء الحساب. حاول مرة أخرى');
       setError('حدث خطأ أثناء إنشاء الحساب');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // تسجيل الدخول بجوجل (محاكاة)
-  const handleGoogleRegister = async () => {
-    setIsLoading(true);
-    setError('');
-
-    try {
-      const result = await loginWithGoogle();
-      if (result.success) {
-        toast.success('✅ تم التسجيل بحساب جوجل بنجاح!');
-        navigate('/');
-      } else {
-        toast.error('❌ فشل التسجيل بجوجل');
-      }
-    } catch (err) {
-      toast.error('❌ حدث خطأ أثناء التسجيل بجوجل');
-      setError('حدث خطأ أثناء التسجيل بجوجل');
     } finally {
       setIsLoading(false);
     }
@@ -388,27 +366,6 @@ const RegisterForm = () => {
           ) : (
             'إنشاء حساب جديد'
           )}
-        </button>
-
-        {/* فصل بين التسجيل العادي وجوجل */}
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-300"></div>
-          </div>
-          <div className="relative flex justify-center text-sm">
-            <span className="px-2 bg-white text-gray-500">أو</span>
-          </div>
-        </div>
-
-        {/* زر التسجيل بجوجل */}
-        <button
-          type="button"
-          onClick={handleGoogleRegister}
-          disabled={isLoading}
-          className="w-full py-3 px-4 bg-white border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-all duration-200 flex items-center justify-center space-x-2 space-x-reverse"
-        >
-          <FcGoogle className="h-5 w-5" />
-          <span>التسجيل بحساب جوجل</span>
         </button>
 
         {/* رابط تسجيل الدخول */}
