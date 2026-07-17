@@ -54,7 +54,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ✅ التحقق من حالة المستخدم عند تحميل الصفحة (مع إصلاح الخطأ)
+  // ✅ التحقق من حالة المستخدم عند تحميل الصفحة
   useEffect(() => {
     let subscription = null;
     let isMounted = true;
@@ -262,13 +262,12 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ✅ تسجيل الدخول بجوجل - مع window.location.origin
+  // ✅ تسجيل الدخول بجوجل
   const loginWithGoogle = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      // ✅ استخدم الرابط الحالي ديناميكياً
       const redirectUrl = window.location.origin;
       
       const { data, error } = await supabase.auth.signInWithOAuth({
@@ -431,7 +430,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ✅ تحديث بيانات المستخدم
+  // ✅ تحديث بيانات المستخدم (مع حفظ البيانات في Supabase)
   const updateProfile = async (data) => {
     try {
       setLoading(true);
@@ -464,6 +463,7 @@ export const AuthProvider = ({ children }) => {
         return { success: true };
       }
       
+      // ✅ للمستخدمين العاديين: تحديث Supabase
       const updateData = {};
       if (data.name) updateData.name = data.name;
       if (data.phone !== undefined) updateData.phone = data.phone || '';
@@ -479,25 +479,33 @@ export const AuthProvider = ({ children }) => {
         throw updateError;
       }
       
+      // ✅ جلب البيانات الجديدة من Supabase
+      const { data: userData } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      
+      // ✅ تحديث user الحالي
       const updatedUser = {
         ...user,
-        name: data.name || user.name,
-        phone: data.phone || user.phone || '',
-        avatar: data.avatar || user.avatar || '',
+        ...userData,
         user_metadata: {
           ...user.user_metadata,
-          name: data.name || user.user_metadata?.name
+          name: userData?.name || user.user_metadata?.name
         }
       };
       
       localStorage.setItem('user', JSON.stringify(updatedUser));
       setUser(updatedUser);
       
+      // ✅ تحديث allUsers
       setAllUsers(prev => prev.map(u => 
-        u.id === user.id ? { ...u, name: data.name || u.name, phone: data.phone || u.phone, avatar: data.avatar || u.avatar } : u
+        u.id === user.id ? userData : u
       ));
       
       return { success: true };
+      
     } catch (err) {
       console.error('Update profile error:', err);
       setError(err.message);
@@ -578,7 +586,6 @@ export const AuthProvider = ({ children }) => {
   // ✅ تحديث إحصائيات المستخدم
   const updateUserStats = async (userId, orderTotal) => {
     try {
-      // ✅ لو الأدمن، اتخطى
       if (userId === ADMIN_ID) {
         console.log('Admin user, skipping stats update');
         return;
